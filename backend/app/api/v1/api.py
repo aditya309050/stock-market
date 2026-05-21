@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from .endpoints import (
     auth, watchlist, screener, alerts, ai, 
     strategies, backtest, portfolios, candles, analytics, advanced_alerts,
-    copilot, subscriptions
+    copilot, subscriptions, agents, marketplace, social, paper
 )
 
 api_router = APIRouter()
@@ -20,3 +20,7 @@ api_router.include_router(analytics.router, prefix="/analytics", tags=["analytic
 api_router.include_router(advanced_alerts.router, prefix="/advanced_alerts", tags=["advanced_alerts"])
 api_router.include_router(copilot.router, prefix="/copilot", tags=["copilot"])
 api_router.include_router(subscriptions.router, prefix="/subscriptions", tags=["subscriptions"])
+api_router.include_router(agents.router, prefix="/agents", tags=["agents"])
+api_router.include_router(marketplace.router, prefix="/marketplace", tags=["marketplace"])
+api_router.include_router(social.router, prefix="/social", tags=["social"])
+api_router.include_router(paper.router, prefix="/paper", tags=["paper"])
