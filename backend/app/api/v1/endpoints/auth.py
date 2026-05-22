@@ -11,23 +11,24 @@ from app.repositories.user import user_repo
 
 router = APIRouter()
 
+
 @router.post("/login", response_model=Token)
 async def login_access_token(
     db: AsyncSession = Depends(deps.get_db),
-    form_data: OAuth2PasswordRequestForm = Depends()
+    form_data: OAuth2PasswordRequestForm = Depends(),
 ) -> Any:
-    """OAuth2 compatible token login, get an access token for future requests"""
     user = await auth_service.authenticate(
         db, email=form_data.username, password=form_data.password
     )
     if not user:
         raise HTTPException(status_code=400, detail="Incorrect email or password")
-    elif not user.is_active:
+    if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
     return {
         "access_token": create_access_token(user.id),
         "token_type": "bearer",
     }
+
 
 @router.post("/register", response_model=User)
 async def register_user(
@@ -35,12 +36,9 @@ async def register_user(
     db: AsyncSession = Depends(deps.get_db),
     user_in: UserCreate,
 ) -> Any:
-    """Create new user."""
-    user = await user_repo.get_by_email(db, email=user_in.email)
-    if user:
+    if await user_repo.get_by_email(db, email=user_in.email):
         raise HTTPException(
             status_code=400,
-            detail="The user with this username already exists in the system.",
+            detail="The user with this email already exists in the system.",
         )
-    user = await user_repo.create(db, obj_in=user_in)
-    return user
+    return await user_repo.create(db, obj_in=user_in)

@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from app.models.user import User
 from app.api import deps
-import asyncio
+from app.services.llm import chat_completion
 
 router = APIRouter()
 
@@ -15,14 +15,10 @@ async def copilot_chat(
     msg: ChatMessage,
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
-    """
-    AI Copilot chat endpoint. 
-    In production, this could be a WebSocket or Server-Sent Events (SSE) endpoint 
-    for streaming responses from an LLM.
-    """
-    # Mock LLM processing delay
-    await asyncio.sleep(1)
-    
-    response_text = f"Analyzed: '{msg.message}'. Based on market indicators, I suggest keeping a tight stop-loss. This is a mocked AI response."
-    
-    return {"reply": response_text}
+    system = (
+        "You are an AI trading copilot. Be concise, practical, and risk-aware. "
+        "Never guarantee returns. Mention key risks when suggesting trades."
+    )
+    user = f"Trader question: {msg.message}"
+    reply = await chat_completion(system, user)
+    return {"reply": reply}

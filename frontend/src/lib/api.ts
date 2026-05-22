@@ -1,16 +1,12 @@
-import { getAuthToken } from "@/stores/auth-store";
+import { getAuthToken, useAuthStore } from "@/stores/auth-store";
+import type {
+  NSEMarketOverview,
+  NSEScanFilters,
+  NSEScanResponse,
+} from "./nse-types";
 import type {
   AIRecommendation,
   AnalyticsDashboard,
-  BacktestResult,
-  MarketplaceStrategy,
-  PaperOrder,
-  PaperOrderResponse,
-  Portfolio,
-  ScreenerCriteria,
-  ScreenerResult,
-  Strategy,
-  Subscription,
   Token,
   User,
   Watchlist,
@@ -66,15 +62,20 @@ async function request<T>(
   }
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
-  if (!res.ok) throw new ApiError(res.status, await parseError(res));
+  if (!res.ok) {
+    const message = await parseError(res);
+    if (
+      auth &&
+      (res.status === 401 || res.status === 403) &&
+      typeof window !== "undefined"
+    ) {
+      useAuthStore.getState().clearAuth();
+      window.location.href = "/login";
+    }
+    throw new ApiError(res.status, message);
+  }
   if (res.status === 204) return undefined as T;
   return res.json();
-}
-
-function postQuery<T>(path: string, params: Record<string, string | number | boolean>) {
-  const qs = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) qs.set(k, String(v));
-  return request<T>(`${path}?${qs}`, { method: "POST" });
 }
 
 // ——— Auth ———
@@ -112,38 +113,6 @@ export const addToWatchlist = (symbol: string) =>
 export const removeFromWatchlist = (itemId: number) =>
   request<{ msg: string }>(`/watchlist/${itemId}`, { method: "DELETE" });
 
-// ——— Strategies ———
-export const getStrategies = () => request<Strategy[]>("/strategies/");
-export const createStrategy = (data: {
-  name: string;
-  description?: string;
-  parameters?: Record<string, unknown>;
-  is_active?: boolean;
-}) =>
-  request<Strategy>("/strategies/", {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-export const deleteStrategy = (id: number) =>
-  request<{ msg: string }>(`/strategies/${id}`, { method: "DELETE" });
-export const toggleStrategy = (id: number, activate: boolean) =>
-  postQuery<Strategy>(`/strategies/${id}/toggle`, { activate });
-
-// ——— Portfolios ———
-export const getPortfolios = () => request<Portfolio[]>("/portfolios/");
-export const createPortfolio = (name: string) =>
-  request<Portfolio>("/portfolios/", {
-    method: "POST",
-    body: JSON.stringify({ name }),
-  });
-
-// ——— Screener ———
-export const runScreener = (criteria: ScreenerCriteria) =>
-  request<ScreenerResult[]>("/screener/run", {
-    method: "POST",
-    body: JSON.stringify(criteria),
-  });
-
 // ——— AI ———
 export const getAISuggestion = (data: {
   symbol: string;
@@ -162,79 +131,45 @@ export const copilotChat = (message: string) =>
     body: JSON.stringify({ message }),
   });
 
-// ——— Backtest ———
-export const runBacktest = (data: {
-  price_data: number[];
-  fast_window?: number;
-  slow_window?: number;
-}) =>
-  request<BacktestResult>("/backtest/run", {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-
-// ——— Alerts ———
-export const testAlert = (message: string) =>
-  postQuery<{ msg: string; task_id: string }>("/alerts/test", { message });
-
-// ——— Candles ———
-export const ingestCandles = (symbol: string, timeframe: string) =>
-  postQuery<{ msg: string; task_id: string }>("/candles/ingest", { symbol, timeframe });
-
-// ——— Advanced alerts ———
-export const processAlerts = (symbol: string, current_price: number) =>
-  postQuery<{ msg: string }>("/advanced_alerts/process", { symbol, current_price });
-
-// ——— Subscriptions ———
-export const getSubscription = () => request<Subscription>("/subscriptions/me");
-export const upgradeSubscription = (tier: string) =>
-  postQuery<{ msg: string }>("/subscriptions/upgrade", { tier });
-
-// ——— Agents ———
-export const analyzeWithAgent = (data: {
-  symbol: string;
-  price_data?: number[];
-  sentiment?: number;
-  account_balance?: number;
-  risk_tolerance?: string;
-}) =>
-  request<{ status: string; result: Record<string, unknown> }>("/agents/analyze", {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-
-// ——— Marketplace ———
-export const getMarketplace = (skip = 0, limit = 20) =>
-  request<MarketplaceStrategy[]>(
-    `/marketplace/?skip=${skip}&limit=${limit}`,
-    {},
-    false
+// ——— NSE Screener ———
+export const getNSESymbols = (index = "NIFTY 50") =>
+  request<{ symbols: string[]; count: number; index: string }>(
+    `/nse/symbols?index=${encodeURIComponent(index)}`
   );
-export const publishStrategy = (data: {
-  strategy_id: number;
-  title: string;
-  description: string;
-}) =>
-  request<Record<string, unknown>>("/marketplace/publish", {
+
+export const getNSEMarketOverview = (index = "NIFTY 50") =>
+  request<NSEMarketOverview>(
+    `/nse/market-overview?index=${encodeURIComponent(index)}`
+  );
+
+export const getNSEQuote = (symbol: string, timeframe = "1d") =>
+  request<{ symbol: string; timeframe: string; signals: Record<string, unknown> }>(
+    `/nse/quote/${symbol}?timeframe=${timeframe}`
+  );
+
+export const runNSEScan = (filters: NSEScanFilters, symbols?: string[]) =>
+  request<NSEScanResponse>("/nse/scan", {
     method: "POST",
-    body: JSON.stringify(data),
+    body: JSON.stringify({ filters, symbols }),
   });
 
-// ——— Social ———
-export const followStrategy = (published_strategy_id: number, allocation_pct = 10) =>
-  request<Record<string, unknown>>("/social/follow", {
+export const runNSEScanWithAI = (filters: NSEScanFilters, symbols?: string[]) =>
+  request<{ scan: NSEScanResponse; prediction: string }>("/nse/ai-predict", {
     method: "POST",
-    body: JSON.stringify({ published_strategy_id, allocation_pct }),
-  });
-export const unfollowStrategy = (publishedStrategyId: number) =>
-  request<Record<string, unknown>>(`/social/unfollow/${publishedStrategyId}`, {
-    method: "POST",
+    body: JSON.stringify({ filters, symbols }),
   });
 
-// ——— Paper trading ———
-export const getPaperBalance = () => request<{ balance: number }>("/paper/balance");
-export const placePaperOrder = (order: PaperOrder) =>
-  request<PaperOrderResponse>("/paper/order", {
-    method: "POST",
-    body: JSON.stringify(order),
-  });
+/** One-click: all indicators + AI swing picks (no manual filters). */
+export const runNSESmartScan = (index: string, symbol?: string) => {
+  const params = new URLSearchParams({ index });
+  if (symbol) params.set("symbol", symbol);
+  return request<NSEScanResponse>(`/nse/smart-scan?${params}`, { method: "POST" });
+};
+
+export const getNSEScanHistory = () =>
+  request<
+    { id: number; created_at: string; index: string; scanned: number; matched: number }[]
+  >("/nse/scan/history");
+
+export const exportNSEScanCsv = (scanId: number) =>
+  `${API_BASE}/nse/scan/${scanId}/export`;
