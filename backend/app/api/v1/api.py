@@ -6,6 +6,7 @@ from .endpoints import (
     ai,
     analytics,
     copilot,
+    dma_screener,
 )
 
 api_router = APIRouter()
@@ -16,3 +17,4 @@ api_router.include_router(nse_screener.router, prefix="/nse", tags=["nse-screene
 api_router.include_router(ai.router, prefix="/ai", tags=["ai"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 api_router.include_router(copilot.router, prefix="/copilot", tags=["copilot"])
+api_router.include_router(dma_screener.router, prefix="/dma-screener", tags=["dma-screener"])

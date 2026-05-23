@@ -120,6 +120,8 @@ def enrich_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     out["ema50"] = ema(out["close"], 50)
     out["ema200"] = ema(out["close"], 200)
     out["sma20"] = sma(out["close"], 20)
+    out["sma50"] = sma(out["close"], 50)
+    out["sma200"] = sma(out["close"], 200)
     out["vwap"] = vwap(out)
     bb_u, bb_m, bb_l = bollinger(out["close"])
     out["bb_upper"], out["bb_mid"], out["bb_lower"] = bb_u, bb_m, bb_l
@@ -187,8 +189,9 @@ def latest_signals(df: pd.DataFrame) -> dict[str, Any]:
         "price": round(float(last["close"]), 2),
         "rsi": round(float(last["rsi"]), 2) if pd.notna(last.get("rsi")) else None,
         "macd": round(float(last["macd"]), 4) if pd.notna(last.get("macd")) else None,
-        "macd_signal": round(float(last["macd_signal"]), 4) if pd.notna(last.get("macd_signal")) else None,
         "macd_bullish_cross": macd_bull,
+        "sma50": round(float(last.get("sma50")), 2) if pd.notna(last.get("sma50")) else None,
+        "sma200": round(float(last.get("sma200")), 2) if pd.notna(last.get("sma200")) else None,
         "above_ema20": float(last["close"]) > float(last.get("ema20", last["close"])),
         "above_ema50": float(last["close"]) > float(last.get("ema50", last["close"])),
         "above_ema200": float(last["close"]) > float(last.get("ema200", last["close"])),
