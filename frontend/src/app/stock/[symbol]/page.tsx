@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { use } from "react";
-import { createChart, ColorType } from "lightweight-charts";
+import { createChart, ColorType, CandlestickSeries, HistogramSeries, LineSeries } from "lightweight-charts";
 import { MainLayout } from "@/components/layout/MainLayout";
 import Link from "next/link";
 
@@ -145,18 +145,18 @@ export default function StockDetailPage({ params }: { params: Promise<{ symbol: 
       },
     });
 
-    const candleSeries = chart.addCandlestickSeries({
+    const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: "#10b981", downColor: "#ef4444", borderVisible: false,
       wickUpColor: "#10b981", wickDownColor: "#ef4444",
     });
 
-    const volumeSeries = chart.addHistogramSeries({
+    const volumeSeries = chart.addSeries(HistogramSeries, {
       color: "#26a69a", priceFormat: { type: "volume" }, priceScaleId: "",
     });
     volumeSeries.priceScale().applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
 
-    const sma50Series = chart.addLineSeries({ color: "#3b82f6", lineWidth: 2 });
-    const sma200Series = chart.addLineSeries({ color: "#eab308", lineWidth: 2 });
+    const sma50Series = chart.addSeries(LineSeries, { color: "#3b82f6", lineWidth: 2 });
+    const sma200Series = chart.addSeries(LineSeries, { color: "#eab308", lineWidth: 2 });
 
     // @ts-ignore
     candleSeries.setData(data.map((d) => ({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close })));
@@ -193,10 +193,10 @@ export default function StockDetailPage({ params }: { params: Promise<{ symbol: 
       crosshair: { mode: 1, vertLine: { color: "#52525b", width: 1, style: 3 }, horzLine: { color: "#52525b", width: 1, style: 3 } },
     });
 
-    const rsiSeries = chart.addLineSeries({ color: "#a855f7", lineWidth: 2 });
+    const rsiSeries = chart.addSeries(LineSeries, { color: "#a855f7", lineWidth: 2 });
 
-    const rsiLine70 = chart.addLineSeries({ color: "#ef444466", lineWidth: 1, lineStyle: 2 });
-    const rsiLine30 = chart.addLineSeries({ color: "#10b98166", lineWidth: 1, lineStyle: 2 });
+    const rsiLine70 = chart.addSeries(LineSeries, { color: "#ef444466", lineWidth: 1, lineStyle: 2 });
+    const rsiLine30 = chart.addSeries(LineSeries, { color: "#10b98166", lineWidth: 1, lineStyle: 2 });
 
     const rsiData = data.map((d, i) => ({ time: d.time, value: rsiValues[i] })).filter((d) => d.value !== null);
     // @ts-ignore
@@ -232,9 +232,9 @@ export default function StockDetailPage({ params }: { params: Promise<{ symbol: 
       crosshair: { mode: 1, vertLine: { color: "#52525b", width: 1, style: 3 }, horzLine: { color: "#52525b", width: 1, style: 3 } },
     });
 
-    const macdSeries = chart.addLineSeries({ color: "#3b82f6", lineWidth: 2 });
-    const signalSeries = chart.addLineSeries({ color: "#ef4444", lineWidth: 1 });
-    const histSeries = chart.addHistogramSeries({ color: "#10b981" });
+    const macdSeries = chart.addSeries(LineSeries, { color: "#3b82f6", lineWidth: 2 });
+    const signalSeries = chart.addSeries(LineSeries, { color: "#ef4444", lineWidth: 1 });
+    const histSeries = chart.addSeries(HistogramSeries, { color: "#10b981" });
 
     const macdData = data.map((d, i) => ({ time: d.time, value: macdValues[i] })).filter((d) => d.value !== null);
     const sigData = data.map((d, i) => ({ time: d.time, value: signalValues[i] })).filter((d) => d.value !== null);

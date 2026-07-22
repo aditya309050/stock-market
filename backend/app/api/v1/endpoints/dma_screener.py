@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import List, Optional, Any
 from app.services.nse.client import NSEClient
-from app.services.nse.scanner import _scan_symbol
 from app.services.indicators.engine import enrich_dataframe, latest_signals
 from app.services.indicators.probability import score_50dma_breakout
 import pandas as pd
