@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/dashboard/golden-cross", label: "🔥 Golden Cross Scanner" },
   { href: "/screener", label: "NSE Screener" },
   { href: "/dma-screener", label: "50 DMA Opportunities" },
   { href: "/chat", label: "AI Copilot" },
