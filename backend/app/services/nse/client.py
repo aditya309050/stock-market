@@ -33,6 +33,13 @@ def to_yahoo_symbol(symbol: str) -> str:
     return s if s.endswith(".NS") else f"{s}.NS"
 
 
+def is_etf_symbol(symbol: str) -> bool:
+    s = symbol.upper().strip()
+    if any(s.endswith(suffix) for suffix in ["BEES", "ETF", "GILT", "GOLD", "SILVER"]) or "BEES" in s or "ETF" in s:
+        return True
+    return False
+
+
 class NSEClient:
     def __init__(self) -> None:
         self._symbols_cache: dict[str, list[str]] = {}
@@ -69,7 +76,7 @@ class NSEClient:
             symbols = [
                 row["symbol"]
                 for row in data.get("data", [])
-                if row.get("symbol")
+                if row.get("symbol") and not is_etf_symbol(row.get("symbol"))
             ]
             if symbols:
                 self._symbols_cache[index] = symbols

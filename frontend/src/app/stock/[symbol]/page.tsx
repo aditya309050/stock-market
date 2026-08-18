@@ -1,132 +1,40 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
-import { use } from "react";
+import { useEffect, useRef, useState, useCallback, use } from "react";
+import Link from "next/link";
 import { createChart, ColorType, CandlestickSeries, HistogramSeries, LineSeries } from "lightweight-charts";
 import { MainLayout } from "@/components/layout/MainLayout";
-import Link from "next/link";
-
-type ChartData = {
-  time: string;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-  sma50: number | null;
-  sma200: number | null;
-};
-
-const TIMEFRAMES = [
-  { label: "3M", value: "3mo" },
-  { label: "6M", value: "6mo" },
-  { label: "1Y", value: "1y" },
-  { label: "2Y", value: "2y" },
-] as const;
-
-// Simple RSI calculation
-function calcRSI(closes: number[], period = 14): (number | null)[] {
-  const rsi: (number | null)[] = [];
-  for (let i = 0; i < closes.length; i++) {
-    if (i < period) { rsi.push(null); continue; }
-    let gains = 0, losses = 0;
-    for (let j = i - period + 1; j <= i; j++) {
-      const diff = closes[j] - closes[j - 1];
-      if (diff > 0) gains += diff; else losses -= diff;
-    }
-    const avgGain = gains / period;
-    const avgLoss = losses / period;
-    if (avgLoss === 0) { rsi.push(100); continue; }
-    const rs = avgGain / avgLoss;
-    rsi.push(100 - 100 / (1 + rs));
-  }
-  return rsi;
-}
-
-// Simple MACD calculation
-function calcMACD(closes: number[]): { macd: (number | null)[]; signal: (number | null)[]; histogram: (number | null)[] } {
-  const ema = (data: number[], period: number): number[] => {
-    const k = 2 / (period + 1);
-    const result: number[] = [data[0]];
-    for (let i = 1; i < data.length; i++) {
-      result.push(data[i] * k + result[i - 1] * (1 - k));
-    }
-    return result;
-  };
-
-  if (closes.length < 26) return { macd: closes.map(() => null), signal: closes.map(() => null), histogram: closes.map(() => null) };
-
-  const ema12 = ema(closes, 12);
-  const ema26 = ema(closes, 26);
-  const macdLine: (number | null)[] = [];
-  const validMacd: number[] = [];
-
-  for (let i = 0; i < closes.length; i++) {
-    if (i < 25) { macdLine.push(null); continue; }
-    const val = ema12[i] - ema26[i];
-    macdLine.push(val);
-    validMacd.push(val);
-  }
-
-  const signalEma = ema(validMacd, 9);
-  const signal: (number | null)[] = [];
-  const histogram: (number | null)[] = [];
-  let signalIdx = 0;
-
-  for (let i = 0; i < closes.length; i++) {
-    if (macdLine[i] === null) {
-      signal.push(null);
-      histogram.push(null);
-    } else {
-      if (signalIdx < 8) {
-        signal.push(null);
-        histogram.push(null);
-      } else {
-        signal.push(signalEma[signalIdx]);
-        histogram.push((macdLine[i] as number) - signalEma[signalIdx]);
-      }
-      signalIdx++;
-    }
-  }
-
-  return { macd: macdLine, signal, histogram };
-}
+import { getDMAStockDetail, type StockDetailResponse } from "@/lib/api";
 
 export default function StockDetailPage({ params }: { params: Promise<{ symbol: string }> }) {
   const resolvedParams = use(params);
   const symbol = decodeURIComponent(resolvedParams.symbol);
 
   const chartContainerRef = useRef<HTMLDivElement>(null);
-  const rsiContainerRef = useRef<HTMLDivElement>(null);
-  const macdContainerRef = useRef<HTMLDivElement>(null);
-  const [data, setData] = useState<ChartData[]>([]);
+  const [detail, setDetail] = useState<StockDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [timeframe, setTimeframe] = useState("1y");
-  const [aiAnalysis, setAiAnalysis] = useState("");
 
-  const fetchData = useCallback(async (tf: string) => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/dma-screener/history/${symbol}?period=${tf}`);
-      if (!res.ok) throw new Error("Failed to fetch data");
-      const json: ChartData[] = await res.json();
-      setData(json);
+      const data = await getDMAStockDetail(symbol);
+      setDetail(data);
     } catch (err: any) {
-      setError(err.message);
+      setError(err?.message || "Failed to fetch stock details");
     } finally {
       setLoading(false);
     }
   }, [symbol]);
 
   useEffect(() => {
-    fetchData(timeframe);
-  }, [fetchData, timeframe]);
+    fetchData();
+  }, [fetchData]);
 
-  // Main Price Chart
+  // Main Interactive Lightweight Chart
   useEffect(() => {
-    if (!chartContainerRef.current || data.length === 0) return;
+    if (!chartContainerRef.current || !detail || !detail.chart_data || detail.chart_data.length === 0) return;
 
     const container = chartContainerRef.current;
     container.innerHTML = "";
@@ -135,7 +43,7 @@ export default function StockDetailPage({ params }: { params: Promise<{ symbol: 
       layout: { background: { type: ColorType.Solid, color: "#0f0f0f" }, textColor: "#a1a1aa" },
       grid: { vertLines: { color: "#1f1f23" }, horzLines: { color: "#1f1f23" } },
       width: container.clientWidth,
-      height: 420,
+      height: 440,
       timeScale: { timeVisible: false, borderColor: "#27272a" },
       rightPriceScale: { borderColor: "#27272a" },
       crosshair: {
@@ -155,305 +63,260 @@ export default function StockDetailPage({ params }: { params: Promise<{ symbol: 
     });
     volumeSeries.priceScale().applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
 
-    const sma50Series = chart.addSeries(LineSeries, { color: "#3b82f6", lineWidth: 2 });
-    const sma200Series = chart.addSeries(LineSeries, { color: "#eab308", lineWidth: 2 });
+    const sma50Series = chart.addSeries(LineSeries, { color: "#10b981", lineWidth: 2 });
+    const sma200Series = chart.addSeries(LineSeries, { color: "#a855f7", lineWidth: 2 });
 
-    // @ts-ignore
-    candleSeries.setData(data.map((d) => ({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close })));
-    // @ts-ignore
-    volumeSeries.setData(data.map((d) => ({ time: d.time, value: d.volume, color: d.close > d.open ? "#10b98144" : "#ef444444" })));
-    // @ts-ignore
-    sma50Series.setData(data.filter((d) => d.sma50 !== null).map((d) => ({ time: d.time, value: d.sma50 })));
-    // @ts-ignore
-    sma200Series.setData(data.filter((d) => d.sma200 !== null).map((d) => ({ time: d.time, value: d.sma200 })));
-
-    chart.timeScale().fitContent();
-
-    const handleResize = () => chart.applyOptions({ width: container.clientWidth });
-    window.addEventListener("resize", handleResize);
-    return () => { window.removeEventListener("resize", handleResize); chart.remove(); };
-  }, [data]);
-
-  // RSI Chart
-  useEffect(() => {
-    if (!rsiContainerRef.current || data.length === 0) return;
-
-    const container = rsiContainerRef.current;
-    container.innerHTML = "";
-    const closes = data.map((d) => d.close);
-    const rsiValues = calcRSI(closes);
-
-    const chart = createChart(container, {
-      layout: { background: { type: ColorType.Solid, color: "#0f0f0f" }, textColor: "#a1a1aa" },
-      grid: { vertLines: { color: "#1f1f23" }, horzLines: { color: "#1f1f23" } },
-      width: container.clientWidth,
-      height: 120,
-      timeScale: { timeVisible: false, borderColor: "#27272a" },
-      rightPriceScale: { borderColor: "#27272a", scaleMargins: { top: 0.1, bottom: 0.1 } },
-      crosshair: { mode: 1, vertLine: { color: "#52525b", width: 1, style: 3 }, horzLine: { color: "#52525b", width: 1, style: 3 } },
-    });
-
-    const rsiSeries = chart.addSeries(LineSeries, { color: "#a855f7", lineWidth: 2 });
-
-    const rsiLine70 = chart.addSeries(LineSeries, { color: "#ef444466", lineWidth: 1, lineStyle: 2 });
-    const rsiLine30 = chart.addSeries(LineSeries, { color: "#10b98166", lineWidth: 1, lineStyle: 2 });
-
-    const rsiData = data.map((d, i) => ({ time: d.time, value: rsiValues[i] })).filter((d) => d.value !== null);
-    // @ts-ignore
-    rsiSeries.setData(rsiData);
-    // @ts-ignore
-    rsiLine70.setData(data.map((d) => ({ time: d.time, value: 70 })));
-    // @ts-ignore
-    rsiLine30.setData(data.map((d) => ({ time: d.time, value: 30 })));
-
-    chart.timeScale().fitContent();
-
-    const handleResize = () => chart.applyOptions({ width: container.clientWidth });
-    window.addEventListener("resize", handleResize);
-    return () => { window.removeEventListener("resize", handleResize); chart.remove(); };
-  }, [data]);
-
-  // MACD Chart
-  useEffect(() => {
-    if (!macdContainerRef.current || data.length === 0) return;
-
-    const container = macdContainerRef.current;
-    container.innerHTML = "";
-    const closes = data.map((d) => d.close);
-    const { macd: macdValues, signal: signalValues, histogram: histValues } = calcMACD(closes);
-
-    const chart = createChart(container, {
-      layout: { background: { type: ColorType.Solid, color: "#0f0f0f" }, textColor: "#a1a1aa" },
-      grid: { vertLines: { color: "#1f1f23" }, horzLines: { color: "#1f1f23" } },
-      width: container.clientWidth,
-      height: 120,
-      timeScale: { timeVisible: false, borderColor: "#27272a" },
-      rightPriceScale: { borderColor: "#27272a" },
-      crosshair: { mode: 1, vertLine: { color: "#52525b", width: 1, style: 3 }, horzLine: { color: "#52525b", width: 1, style: 3 } },
-    });
-
-    const macdSeries = chart.addSeries(LineSeries, { color: "#3b82f6", lineWidth: 2 });
-    const signalSeries = chart.addSeries(LineSeries, { color: "#ef4444", lineWidth: 1 });
-    const histSeries = chart.addSeries(HistogramSeries, { color: "#10b981" });
-
-    const macdData = data.map((d, i) => ({ time: d.time, value: macdValues[i] })).filter((d) => d.value !== null);
-    const sigData = data.map((d, i) => ({ time: d.time, value: signalValues[i] })).filter((d) => d.value !== null);
-    const histData = data.map((d, i) => ({
+    // Format candlestick data
+    const cData = detail.chart_data.map((d) => ({
       time: d.time,
-      value: histValues[i],
-      color: (histValues[i] || 0) >= 0 ? "#10b98188" : "#ef444488",
-    })).filter((d) => d.value !== null);
+      open: d.open,
+      high: d.high,
+      low: d.low,
+      close: d.close,
+    }));
+    const vData = detail.chart_data.map((d) => ({
+      time: d.time,
+      value: d.volume,
+      color: d.close >= d.open ? "#10b98144" : "#ef444444",
+    }));
 
     // @ts-ignore
-    macdSeries.setData(macdData);
+    candleSeries.setData(cData);
     // @ts-ignore
-    signalSeries.setData(sigData);
-    // @ts-ignore
-    histSeries.setData(histData);
+    volumeSeries.setData(vData);
+
+    // Overlay price lines for S1 & R1
+    if (detail.supports && detail.supports[0]) {
+      const s1Line = chart.addSeries(LineSeries, { color: "#10b98188", lineWidth: 1, lineStyle: 2 });
+      // @ts-ignore
+      s1Line.setData(cData.map((d) => ({ time: d.time, value: detail.supports[0].price })));
+    }
+    if (detail.resistances && detail.resistances[0]) {
+      const r1Line = chart.addSeries(LineSeries, { color: "#ef444488", lineWidth: 1, lineStyle: 2 });
+      // @ts-ignore
+      r1Line.setData(cData.map((d) => ({ time: d.time, value: detail.resistances[0].price })));
+    }
 
     chart.timeScale().fitContent();
 
     const handleResize = () => chart.applyOptions({ width: container.clientWidth });
     window.addEventListener("resize", handleResize);
     return () => { window.removeEventListener("resize", handleResize); chart.remove(); };
-  }, [data]);
+  }, [detail]);
 
-  // Generate AI analysis
-  useEffect(() => {
-    if (data.length < 50) { setAiAnalysis(""); return; }
-    const latest = data[data.length - 1];
-    const prev = data[data.length - 2];
-    const closes = data.map((d) => d.close);
-    const rsiValues = calcRSI(closes);
-    const currentRSI = rsiValues[rsiValues.length - 1];
-
-    const avgVol = data.slice(-21, -1).reduce((s, d) => s + d.volume, 0) / 20;
-    const volSpike = latest.volume / avgVol;
-
-    let analysis = `${symbol} is currently trading at ₹${latest.close.toFixed(2)}. `;
-
-    if (latest.sma50) {
-      const distPct = Math.abs(latest.close - latest.sma50) / latest.sma50 * 100;
-      if (distPct <= 2) {
-        analysis += `The stock is trading very close to its 50 DMA (₹${latest.sma50.toFixed(2)}), just ${distPct.toFixed(1)}% away — this is a critical zone. `;
-      } else if (latest.close > latest.sma50) {
-        analysis += `The stock is ${distPct.toFixed(1)}% above its 50 DMA (₹${latest.sma50.toFixed(2)}), showing bullish momentum. `;
-      } else {
-        analysis += `The stock is ${distPct.toFixed(1)}% below its 50 DMA (₹${latest.sma50.toFixed(2)}). `;
-      }
-    }
-
-    if (volSpike > 1.5) analysis += `There is a significant volume spike of ${volSpike.toFixed(1)}x the 20-day average, indicating strong participation. `;
-
-    if (currentRSI !== null) {
-      if (currentRSI > 70) analysis += `RSI is at ${currentRSI.toFixed(1)} — overbought territory; caution warranted. `;
-      else if (currentRSI > 50) analysis += `RSI is at ${currentRSI.toFixed(1)} — bullish momentum building. `;
-      else if (currentRSI > 30) analysis += `RSI is at ${currentRSI.toFixed(1)} — neutral zone. `;
-      else analysis += `RSI is at ${currentRSI.toFixed(1)} — oversold, potential reversal zone. `;
-    }
-
-    if (latest.sma50 && latest.sma200) {
-      if (latest.sma50 > latest.sma200) analysis += "The Golden Cross (50 DMA > 200 DMA) is active — long-term bullish structure. ";
-      else analysis += "The Death Cross (50 DMA < 200 DMA) is present — long-term bearish pressure. ";
-    }
-
-    const priceChange = ((latest.close - prev.close) / prev.close * 100);
-    if (priceChange > 2) analysis += `Today's move of +${priceChange.toFixed(1)}% is notable. Probability of breakout is HIGH.`;
-    else if (priceChange > 0) analysis += "Overall setup looks constructive. Probability of breakout is MEDIUM.";
-    else analysis += "Price action is cautious. Monitor for a confirmed bounce or breakdown.";
-
-    setAiAnalysis(analysis);
-  }, [data, symbol]);
-
-  const latest = data.length > 0 ? data[data.length - 1] : null;
-  const prev = data.length > 1 ? data[data.length - 2] : null;
-  const priceChange = latest && prev ? ((latest.close - prev.close) / prev.close * 100) : 0;
+  const getScoreBadge = (score: number) => {
+    if (score >= 80) return "bg-emerald-950/90 text-emerald-400 border-emerald-800";
+    if (score >= 65) return "bg-blue-950/90 text-blue-400 border-blue-800";
+    return "bg-amber-950/90 text-amber-400 border-amber-800";
+  };
 
   return (
     <MainLayout>
       <div className="p-4 md:p-8 max-w-[90rem] mx-auto space-y-6">
-
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <Link href="/dma-screener" className="text-zinc-500 hover:text-zinc-300 transition-colors">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-              </Link>
-              <h1 className="text-3xl font-bold">{symbol}</h1>
-              {latest && (
-                <>
-                  <span className="text-2xl font-semibold text-white">₹{latest.close.toFixed(2)}</span>
-                  <span className={`text-sm font-bold px-2 py-0.5 rounded ${priceChange >= 0 ? "bg-emerald-900/50 text-emerald-400" : "bg-red-900/50 text-red-400"}`}>
-                    {priceChange >= 0 ? "+" : ""}{priceChange.toFixed(2)}%
-                  </span>
-                </>
-              )}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl">
+          <div className="flex items-center gap-4">
+            <Link
+              href="/dma-screener"
+              className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl transition-colors"
+            >
+              ← Back
+            </Link>
+            <div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-3xl font-extrabold tracking-wide text-white">{symbol}</h1>
+                {detail && (
+                  <span className="text-2xl font-bold text-white">₹{detail.price.toFixed(2)}</span>
+                )}
+                <span className="px-2 py-0.5 bg-emerald-950 text-emerald-400 text-xs font-semibold rounded-full border border-emerald-800">
+                  REAL MARKET DATA
+                </span>
+              </div>
+              <p className="text-zinc-400 text-xs mt-1">NSE Equity · Live Candles &amp; Support/Resistance Matrix</p>
             </div>
-            <p className="text-zinc-500 text-sm mt-1 ml-9">Consolidated · Daily Candles</p>
           </div>
 
-          {/* Timeframe Selector */}
-          <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-lg p-1">
-            {TIMEFRAMES.map((tf) => (
-              <button
-                key={tf.value}
-                onClick={() => setTimeframe(tf.value)}
-                className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                  timeframe === tf.value
-                    ? "bg-blue-600 text-white shadow-lg"
-                    : "text-zinc-400 hover:text-white hover:bg-zinc-800"
-                }`}
-              >
-                {tf.label}
-              </button>
-            ))}
-          </div>
+          {detail && (
+            <div className={`px-4 py-2 rounded-xl border text-sm font-bold flex items-center gap-2 ${getScoreBadge(detail.dma_metrics.score)}`}>
+              <span>SETUP SCORE:</span>
+              <span className="text-lg">{detail.dma_metrics.score.toFixed(0)} / 100</span>
+            </div>
+          )}
         </div>
 
         {error && (
-          <div className="bg-red-900/20 border border-red-800 text-red-400 p-4 rounded-xl text-sm">{error}</div>
-        )}
-
-        {/* Key Metrics */}
-        {latest && (
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            {[
-              { label: "50 DMA", value: latest.sma50 ? `₹${latest.sma50.toFixed(2)}` : "—", color: "text-blue-400" },
-              { label: "200 DMA", value: latest.sma200 ? `₹${latest.sma200.toFixed(2)}` : "—", color: "text-yellow-400" },
-              { label: "Distance", value: latest.sma50 ? `${(Math.abs(latest.close - latest.sma50) / latest.sma50 * 100).toFixed(2)}%` : "—", color: latest.sma50 && Math.abs(latest.close - latest.sma50) / latest.sma50 * 100 <= 2 ? "text-emerald-400" : "text-zinc-300" },
-              { label: "Volume", value: latest.volume.toLocaleString(), color: "text-zinc-300" },
-              { label: "Trend", value: latest.sma50 && latest.sma200 ? (latest.sma50 > latest.sma200 ? "Golden Cross ✨" : "Death Cross") : "—", color: latest.sma50 && latest.sma200 && latest.sma50 > latest.sma200 ? "text-emerald-400" : "text-red-400" },
-            ].map((m) => (
-              <div key={m.label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-                <p className="text-xs text-zinc-500 uppercase tracking-wider">{m.label}</p>
-                <p className={`text-lg font-bold mt-1 ${m.color}`}>{m.value}</p>
-              </div>
-            ))}
+          <div className="p-6 bg-red-950/40 border border-red-800 text-red-300 text-sm rounded-2xl">
+            {error}
           </div>
         )}
 
-        {/* Charts Grid */}
-        <div className="grid lg:grid-cols-4 gap-6">
-          <div className="lg:col-span-3 space-y-2">
-            {/* Main Chart */}
-            <div className="bg-[#0f0f0f] border border-zinc-800 rounded-xl overflow-hidden shadow-2xl relative">
-              {loading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-zinc-900/70 z-10">
-                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                </div>
-              )}
-              <div className="absolute top-3 left-3 z-10 flex gap-3 text-xs font-medium">
-                <div className="flex items-center gap-1.5 bg-zinc-900/90 px-2.5 py-1 rounded-md backdrop-blur border border-zinc-800">
-                  <div className="w-2.5 h-0.5 bg-blue-500 rounded"></div>
-                  <span className="text-zinc-400">50 DMA</span>
-                </div>
-                <div className="flex items-center gap-1.5 bg-zinc-900/90 px-2.5 py-1 rounded-md backdrop-blur border border-zinc-800">
-                  <div className="w-2.5 h-0.5 bg-yellow-500 rounded"></div>
-                  <span className="text-zinc-400">200 DMA</span>
-                </div>
-              </div>
-              <div ref={chartContainerRef} className="w-full" />
-            </div>
-
-            {/* RSI */}
-            <div className="bg-[#0f0f0f] border border-zinc-800 rounded-xl overflow-hidden relative">
-              <div className="absolute top-2 left-3 z-10 text-xs font-semibold text-purple-400 bg-zinc-900/90 px-2 py-0.5 rounded backdrop-blur border border-zinc-800">RSI (14)</div>
-              <div ref={rsiContainerRef} className="w-full" />
-            </div>
-
-            {/* MACD */}
-            <div className="bg-[#0f0f0f] border border-zinc-800 rounded-xl overflow-hidden relative">
-              <div className="absolute top-2 left-3 z-10 flex gap-2 text-xs font-semibold">
-                <span className="text-blue-400 bg-zinc-900/90 px-2 py-0.5 rounded backdrop-blur border border-zinc-800">MACD</span>
-                <span className="text-red-400 bg-zinc-900/90 px-2 py-0.5 rounded backdrop-blur border border-zinc-800">Signal</span>
-              </div>
-              <div ref={macdContainerRef} className="w-full" />
-            </div>
+        {loading ? (
+          <div className="h-96 flex flex-col items-center justify-center bg-zinc-900/40 border border-zinc-800 rounded-2xl">
+            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-3" />
+            <p className="text-zinc-400 text-sm">Calculating DMAs, Support/Resistance &amp; Volume Profile…</p>
           </div>
-
-          {/* AI Analysis Sidebar */}
-          <div className="space-y-4">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-              <div className="flex items-center gap-2 text-blue-400 mb-4 border-b border-zinc-800 pb-3">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a4 4 0 0 0-4 4v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h-2V6a4 4 0 0 0-4-4z"></path></svg>
-                <h3 className="font-bold text-lg">AI Analysis</h3>
-              </div>
-
-              {loading ? (
-                <div className="animate-pulse space-y-3">
-                  <div className="h-4 bg-zinc-800 rounded w-3/4"></div>
-                  <div className="h-4 bg-zinc-800 rounded w-full"></div>
-                  <div className="h-4 bg-zinc-800 rounded w-5/6"></div>
-                  <div className="h-4 bg-zinc-800 rounded w-2/3"></div>
-                </div>
-              ) : aiAnalysis ? (
-                <p className="text-zinc-300 text-sm leading-relaxed">{aiAnalysis}</p>
-              ) : (
-                <p className="text-zinc-500 text-sm">Not enough data to analyze.</p>
-              )}
-            </div>
-
-            {/* Quick Stats */}
-            {latest && (
-              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-3">
-                <h4 className="text-sm font-semibold text-zinc-300 border-b border-zinc-800 pb-2">Quick Stats</h4>
-                {[
-                  { label: "Open", value: `₹${latest.open.toFixed(2)}` },
-                  { label: "High", value: `₹${latest.high.toFixed(2)}` },
-                  { label: "Low", value: `₹${latest.low.toFixed(2)}` },
-                  { label: "Close", value: `₹${latest.close.toFixed(2)}` },
-                  { label: "Volume", value: latest.volume.toLocaleString() },
-                ].map((s) => (
-                  <div key={s.label} className="flex justify-between text-sm">
-                    <span className="text-zinc-500">{s.label}</span>
-                    <span className="text-zinc-200 font-medium">{s.value}</span>
+        ) : detail ? (
+          <div className="space-y-6">
+            {/* Confluence Alert Banner */}
+            {detail.confluence_tags.length > 0 && (
+              <div className="bg-gradient-to-r from-blue-950/90 via-zinc-900 to-indigo-950/90 border border-blue-800/60 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-blue-300 font-bold text-sm">
+                  <span>🔥 TECHNICAL CONFLUENCE DETECTED:</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {detail.confluence_tags.map((tag) => (
+                      <span key={tag} className="px-2.5 py-0.5 bg-blue-900/80 border border-blue-700 text-white text-xs font-medium rounded-full">
+                        {tag}
+                      </span>
+                    ))}
                   </div>
-                ))}
+                </div>
+                <span className="text-zinc-400 text-xs">
+                  Multiple independent technical signals aligned
+                </span>
               </div>
             )}
+
+            {/* DMA Technical Metrics Row */}
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+                <span className="text-xs text-zinc-500 block uppercase">20 DMA</span>
+                <span className="text-lg font-bold text-blue-400">₹{detail.dma_metrics.dma20.toFixed(2)}</span>
+              </div>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+                <span className="text-xs text-zinc-500 block uppercase">50 DMA</span>
+                <span className="text-lg font-bold text-emerald-400">₹{detail.dma_metrics.dma50.toFixed(2)}</span>
+                <span className="text-[11px] text-zinc-400 block">{detail.dma_metrics.dma50_slope_trend} ({detail.dma_metrics.dma50_slope}%)</span>
+              </div>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+                <span className="text-xs text-zinc-500 block uppercase">200 DMA</span>
+                <span className="text-lg font-bold text-purple-400">₹{detail.dma_metrics.dma200.toFixed(2)}</span>
+                <span className="text-[11px] text-zinc-400 block">{detail.dma_metrics.dma200_slope_trend} ({detail.dma_metrics.dma200_slope}%)</span>
+              </div>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+                <span className="text-xs text-zinc-500 block uppercase">RSI (14)</span>
+                <span className="text-lg font-bold text-white">{detail.dma_metrics.rsi}</span>
+                <span className="text-[11px] text-zinc-400 block">{detail.dma_metrics.rsi >= 50 ? "Bullish zone" : "Neutral"}</span>
+              </div>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+                <span className="text-xs text-zinc-500 block uppercase">Volume Multiplier</span>
+                <span className="text-lg font-bold text-amber-400">{detail.dma_metrics.volume_mult}x</span>
+                <span className="text-[11px] text-zinc-400 block">vs 20d avg</span>
+              </div>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+                <span className="text-xs text-zinc-500 block uppercase">50/200 Trend</span>
+                <span className={`text-sm font-bold block mt-1 ${detail.dma_metrics.is_golden_cross ? "text-emerald-400" : "text-red-400"}`}>
+                  {detail.dma_metrics.is_golden_cross ? "Golden Cross ✨" : "Death Cross"}
+                </span>
+              </div>
+            </div>
+
+            {/* Main Layout: Left Chart + Right Support/Resistance Matrix */}
+            <div className="grid lg:grid-cols-3 gap-6">
+              {/* Left Column: Interactive Price Chart */}
+              <div className="lg:col-span-2 space-y-4">
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 shadow-xl">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-bold text-zinc-200">📈 Interactive Price Chart &amp; DMA Overlays</h3>
+                    <div className="flex gap-3 text-xs">
+                      <span className="flex items-center gap-1 text-emerald-400">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> 50 DMA
+                      </span>
+                      <span className="flex items-center gap-1 text-purple-400">
+                        <span className="w-2 h-2 rounded-full bg-purple-500 inline-block" /> 200 DMA
+                      </span>
+                    </div>
+                  </div>
+                  <div ref={chartContainerRef} className="w-full rounded-xl overflow-hidden" />
+                </div>
+              </div>
+
+              {/* Right Column: Support & Resistance Matrix & Volume Profile */}
+              <div className="space-y-6">
+                {/* Support & Resistance Levels Card */}
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 shadow-xl space-y-4">
+                  <h3 className="text-base font-bold text-white border-b border-zinc-800 pb-3 flex items-center justify-between">
+                    <span>🎯 Support &amp; Resistance Matrix</span>
+                    <span className="text-xs text-zinc-400 font-normal">Calculated Level Strengths</span>
+                  </h3>
+
+                  {/* Resistances (R3, R2, R1) */}
+                  <div className="space-y-2">
+                    <span className="text-xs font-bold text-red-400 uppercase tracking-wider block">Resistances</span>
+                    {detail.resistances.length === 0 ? (
+                      <p className="text-xs text-zinc-500">No major resistance zones detected above</p>
+                    ) : (
+                      detail.resistances.map((r) => (
+                        <div key={r.label} className="bg-zinc-950/80 border border-red-950 p-3 rounded-xl space-y-1">
+                          <div className="flex justify-between items-center text-xs font-bold">
+                            <span className="text-red-400">{r.label} — ₹{r.price.toFixed(2)}</span>
+                            <span className="text-red-300">+{r.distance_pct}%</span>
+                          </div>
+                          <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+                            <div className="bg-red-500 h-full rounded-full" style={{ width: `${r.strength}%` }} />
+                          </div>
+                          <div className="flex justify-between items-center text-[10px] text-zinc-400">
+                            <span>Strength: {r.strength.toFixed(0)}/100</span>
+                            <span>{r.reasons.join(" · ")}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Current Price Divider */}
+                  <div className="bg-zinc-800/80 p-2.5 rounded-xl text-center text-xs font-bold text-zinc-200 border border-zinc-700">
+                    ▲ Current Price: ₹{detail.price.toFixed(2)}
+                  </div>
+
+                  {/* Supports (S1, S2, S3) */}
+                  <div className="space-y-2">
+                    <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider block">Supports</span>
+                    {detail.supports.length === 0 ? (
+                      <p className="text-xs text-zinc-500">No major support zones detected below</p>
+                    ) : (
+                      detail.supports.map((s) => (
+                        <div key={s.label} className="bg-zinc-950/80 border border-emerald-950 p-3 rounded-xl space-y-1">
+                          <div className="flex justify-between items-center text-xs font-bold">
+                            <span className="text-emerald-400">{s.label} — ₹{s.price.toFixed(2)}</span>
+                            <span className="text-emerald-300">{s.distance_pct}%</span>
+                          </div>
+                          <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+                            <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${s.strength}%` }} />
+                          </div>
+                          <div className="flex justify-between items-center text-[10px] text-zinc-400">
+                            <span>Strength: {s.strength.toFixed(0)}/100</span>
+                            <span>{s.reasons.join(" · ")}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Volume Profile Card */}
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 shadow-xl space-y-3">
+                  <h3 className="text-sm font-bold text-white border-b border-zinc-800 pb-2">
+                    📊 Volume Profile Nodes
+                  </h3>
+                  <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                    <div className="bg-zinc-950 p-2.5 rounded-xl">
+                      <span className="text-zinc-500 block">POC</span>
+                      <span className="font-bold text-amber-400">₹{detail.volume_profile.poc.toFixed(2)}</span>
+                    </div>
+                    <div className="bg-zinc-950 p-2.5 rounded-xl">
+                      <span className="text-zinc-500 block">VAH</span>
+                      <span className="font-bold text-red-400">₹{detail.volume_profile.vah.toFixed(2)}</span>
+                    </div>
+                    <div className="bg-zinc-950 p-2.5 rounded-xl">
+                      <span className="text-zinc-500 block">VAL</span>
+                      <span className="font-bold text-emerald-400">₹{detail.volume_profile.val.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+        ) : null}
       </div>
     </MainLayout>
   );

@@ -26,10 +26,10 @@ export function DashboardClient() {
             <p className="text-zinc-400 mt-1">Live movers · Watchlist · Quick links</p>
           </div>
           <Link
-            href="/screener"
-            className="bg-white text-black px-4 py-2 rounded-md text-sm font-medium"
+            href="/sector-analysis"
+            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
           >
-            Open Screener
+            Sector Analysis
           </Link>
         </header>
 

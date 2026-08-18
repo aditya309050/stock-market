@@ -1,134 +1,289 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from typing import List, Optional, Any
-from app.services.nse.client import NSEClient
-from app.services.indicators.engine import enrich_dataframe, latest_signals
-from app.services.indicators.probability import score_50dma_breakout
+from typing import List, Optional, Dict, Any
+import asyncio
 import pandas as pd
 import numpy as np
 
-router = APIRouter()
-nse_client = NSEClient()
+from app.services.nse.client import nse_client
+from app.services.indicators.dma_engine import calculate_dma_metrics, DMAMetrics
+from app.services.indicators.sr_engine import calculate_sr_analysis, SRAnalysisResult
 
-class DMAScanResult(BaseModel):
+router = APIRouter()
+
+
+class SRLevelSchema(BaseModel):
+    level_type: str
+    label: str
+    price: float
+    zone_low: float
+    zone_high: float
+    distance_pct: float
+    strength: float
+    test_count: int
+    reasons: List[str]
+
+
+class VolumeProfileSchema(BaseModel):
+    poc: float
+    vah: float
+    val: float
+
+
+class DMAMetricsSchema(BaseModel):
+    symbol: str
+    last_price: float
+    dma20: float
+    dma50: float
+    dma200: float
+    prev_dma50: float
+    prev_dma200: float
+    gap_pct: float
+    dist_50_pct: float
+    dist_200_pct: float
+    dma50_slope: float
+    dma50_slope_trend: str
+    dma200_slope: float
+    dma200_slope_trend: str
+    rsi: float
+    volume_mult: float
+    is_golden_cross: bool
+    is_crossed_today: bool
+    is_recent_cross: bool
+    is_established_cross: bool
+    is_near_cross: bool
+    is_above_200: bool
+    is_above_50: bool
+    status: str
+    cross_category: str
+    setup_category: str
+    score: float
+
+
+class DMAScanItem(BaseModel):
     symbol: str
     price: float
-    sma50: float
-    sma200: float
-    distance_pct: float
-    volume_spike: float
+    dma50: float
+    dma200: float
+    dist_50_pct: float
+    dist_200_pct: float
+    dma50_slope_trend: str
     rsi: float
-    macd_bullish: bool
-    probability_score: float
-    probability_class: str
-    setup_type: str
-    ai_analysis: str
+    volume_mult: float
+    setup_category: str
+    score: float
+    is_golden_cross: bool
+    nearest_support: Optional[SRLevelSchema] = None
+    nearest_resistance: Optional[SRLevelSchema] = None
+    confluence_tags: List[str]
+
 
 class DMAScanResponse(BaseModel):
-    results: List[DMAScanResult]
+    index: str
     scanned: int
     matched: int
+    results: List[DMAScanItem]
 
-@router.get("/scan", response_model=DMAScanResponse)
-async def scan_dma_opportunities(index: str = "NIFTY 500"):
-    """
-    Scans the index for 50 DMA opportunities (Near 50 DMA, Crossing, Bouncing, Golden Trend).
-    """
-    try:
-        symbols = nse_client.get_index_constituents(index)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid index: {str(e)}")
 
-    results = []
-    
-    # Normally we would do this asynchronously or in parallel, 
-    # but keeping it simple for the implementation.
-    for sym in symbols[:100]: # Limiting to 100 for performance during live request
-        try:
-            hist = nse_client.get_historical_data(sym, period="3mo")
-            if hist.empty or len(hist) < 50:
-                continue
-                
-            df_enriched = enrich_dataframe(hist)
-            signals = latest_signals(df_enriched)
-            prob_data = score_50dma_breakout(df_enriched, signals)
-            
-            cmp = signals["price"]
-            sma50 = signals.get("sma50")
-            sma200 = signals.get("sma200")
-            
-            if not sma50 or pd.isna(sma50):
-                continue
-                
-            dist_pct = prob_data["distance_from_50dma_pct"]
-            setup_type = None
-            
-            # 1. Near 50 DMA
-            if dist_pct <= 2.0:
-                setup_type = "Near 50 DMA"
-            # 2. Golden Trend
-            elif sma200 and not pd.isna(sma200) and sma50 > sma200:
-                setup_type = "Golden Trend"
-            # 3. Crossing Above 50 DMA (Price slightly below, but MACD bull cross + volume)
-            elif cmp < sma50 and dist_pct <= 3.0 and signals.get("macd_bullish_cross") and prob_data["volume_spike"] > 1.2:
-                setup_type = "Crossing Above"
-            
-            if setup_type:
-                results.append(DMAScanResult(
-                    symbol=sym,
-                    price=cmp,
-                    sma50=round(sma50, 2),
-                    sma200=round(sma200, 2) if sma200 else 0.0,
-                    distance_pct=dist_pct,
-                    volume_spike=prob_data["volume_spike"],
-                    rsi=signals.get("rsi") or 50.0,
-                    macd_bullish=signals.get("macd_bullish_cross") or False,
-                    probability_score=prob_data["probability_score"],
-                    probability_class=prob_data["probability_class"],
-                    setup_type=setup_type,
-                    ai_analysis=prob_data["ai_analysis"]
-                ))
-        except Exception:
-            continue
-            
-    # Sort by probability score descending
-    results.sort(key=lambda x: x.probability_score, reverse=True)
-    
-    return DMAScanResponse(
-        results=results,
-        scanned=len(symbols),
-        matched=len(results)
+class StockDetailResponse(BaseModel):
+    symbol: str
+    price: float
+    dma_metrics: DMAMetricsSchema
+    supports: List[SRLevelSchema]
+    resistances: List[SRLevelSchema]
+    volume_profile: VolumeProfileSchema
+    confluence_tags: List[str]
+    chart_data: List[Dict[str, Any]]
+
+
+def _process_single_stock_scan(symbol: str, df: pd.DataFrame) -> DMAScanItem | None:
+    if df is None or len(df) < 50:
+        return None
+
+    dma_m = calculate_dma_metrics(df, symbol)
+    if not dma_m:
+        return None
+
+    sr_res = calculate_sr_analysis(df, dma_m.last_price, dma_m.dma50, dma_m.dma200)
+
+    ns_schema = (
+        SRLevelSchema(
+            level_type=sr_res.nearest_support.level_type,
+            label=sr_res.nearest_support.label,
+            price=sr_res.nearest_support.price,
+            zone_low=sr_res.nearest_support.zone_low,
+            zone_high=sr_res.nearest_support.zone_high,
+            distance_pct=sr_res.nearest_support.distance_pct,
+            strength=sr_res.nearest_support.strength,
+            test_count=sr_res.nearest_support.test_count,
+            reasons=sr_res.nearest_support.reasons,
+        )
+        if sr_res.nearest_support
+        else None
     )
 
-@router.get("/history/{symbol}")
-async def get_stock_history(symbol: str, period: str = "1y"):
+    nr_schema = (
+        SRLevelSchema(
+            level_type=sr_res.nearest_resistance.level_type,
+            label=sr_res.nearest_resistance.label,
+            price=sr_res.nearest_resistance.price,
+            zone_low=sr_res.nearest_resistance.zone_low,
+            zone_high=sr_res.nearest_resistance.zone_high,
+            distance_pct=sr_res.nearest_resistance.distance_pct,
+            strength=sr_res.nearest_resistance.strength,
+            test_count=sr_res.nearest_resistance.test_count,
+            reasons=sr_res.nearest_resistance.reasons,
+        )
+        if sr_res.nearest_resistance
+        else None
+    )
+
+    return DMAScanItem(
+        symbol=symbol,
+        price=dma_m.last_price,
+        dma50=dma_m.dma50,
+        dma200=dma_m.dma200,
+        dist_50_pct=dma_m.dist_50_pct,
+        dist_200_pct=dma_m.dist_200_pct,
+        dma50_slope_trend=dma_m.dma50_slope_trend,
+        rsi=dma_m.rsi,
+        volume_mult=dma_m.volume_mult,
+        setup_category=dma_m.setup_category,
+        score=dma_m.score,
+        is_golden_cross=dma_m.is_golden_cross,
+        nearest_support=ns_schema,
+        nearest_resistance=nr_schema,
+        confluence_tags=sr_res.confluence_tags,
+    )
+
+
+@router.get("/scan", response_model=DMAScanResponse)
+async def scan_dma_opportunities(
+    index: str = Query("NIFTY 500"),
+    filter_category: Optional[str] = Query(None, description="ALL, GOLDEN_CROSS, NEAR_50_DMA, NEAR_200_DMA, CONFLUENCE, BREAKOUT_WATCH"),
+):
     """
-    Returns OHLCV data + SMA50 and SMA200 for TradingView lightweight charts.
+    Scans NSE stocks for real DMA metrics, S/R levels, Confluence, and Setup Scores.
     """
+    index_str = str(getattr(index, "default", index)) if not isinstance(index, str) else index
+    if not index_str or not isinstance(index_str, str):
+        index_str = "NIFTY 500"
+
     try:
-        hist = nse_client.get_historical_data(symbol, period=period)
-        if hist.empty:
-            raise HTTPException(status_code=404, detail="No data found")
-            
-        df = enrich_dataframe(hist)
-        
-        # We need to format the data for lightweight-charts
-        # Requires: { time: 'YYYY-MM-DD', open, high, low, close, value (volume) }
-        
-        chart_data = []
-        for index, row in df.iterrows():
-            date_str = index.strftime("%Y-%m-%d")
-            chart_data.append({
-                "time": date_str,
-                "open": float(row["open"]),
-                "high": float(row["high"]),
-                "low": float(row["low"]),
-                "close": float(row["close"]),
-                "volume": float(row["volume"]),
-                "sma50": round(float(row["sma50"]), 2) if pd.notna(row.get("sma50")) else None,
-                "sma200": round(float(row["sma200"]), 2) if pd.notna(row.get("sma200")) else None,
-            })
-            
-        return chart_data
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        symbols = await nse_client.get_index_symbols(index_str)
+    except Exception:
+        symbols = []
+
+    if not symbols:
+        symbols = [
+            "BEL", "HAL", "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK",
+            "SBIN", "LT", "MARUTI", "TITAN", "SUNPHARMA", "BAJFINANCE", "WIPRO"
+        ]
+
+    # Fetch OHLC in parallel batch for top candidates (limit 35 for live response speed)
+    scan_targets = symbols[:35]
+    results = []
+
+    for sym in scan_targets:
+        try:
+            df = await nse_client.fetch_ohlc(sym, timeframe="1d", limit=120)
+            item = _process_single_stock_scan(sym, df)
+            if item:
+                if filter_category and filter_category != "ALL":
+                    if filter_category == "GOLDEN_CROSS" and not item.is_golden_cross:
+                        continue
+                    if filter_category == "NEAR_50_DMA" and abs(item.dist_50_pct) > 3.0:
+                        continue
+                    if filter_category == "NEAR_200_DMA" and abs(item.dist_200_pct) > 3.0:
+                        continue
+                    if filter_category == "CONFLUENCE" and not item.confluence_tags:
+                        continue
+                    if filter_category == "BREAKOUT_WATCH" and item.setup_category != "BREAKOUT_WATCH":
+                        continue
+                results.append(item)
+        except Exception:
+            continue
+
+    # Sort results by setup score descending
+    results.sort(key=lambda x: x.score, reverse=True)
+
+    return DMAScanResponse(
+        index=index_str,
+        scanned=len(scan_targets),
+        matched=len(results),
+        results=results,
+    )
+
+
+@router.get("/stock/{symbol}", response_model=StockDetailResponse)
+async def get_stock_detail_analysis(symbol: str):
+    """
+    Full single stock analysis: live OHLC, 20/50/200 DMAs, S1-S3 / R1-R3 strength levels, Volume Profile, Confluence tags, and Chart Series.
+    """
+    sym = symbol.upper().strip()
+    df = await nse_client.fetch_ohlc(sym, timeframe="1d", limit=150)
+    if df.empty or len(df) < 20:
+        raise HTTPException(status_code=404, detail=f"No market data found for {sym}")
+
+    dma_m = calculate_dma_metrics(df, sym)
+    if not dma_m:
+        raise HTTPException(status_code=500, detail="Failed to calculate DMA metrics")
+
+    sr_res = calculate_sr_analysis(df, dma_m.last_price, dma_m.dma50, dma_m.dma200)
+
+    supports_schema = [
+        SRLevelSchema(
+            level_type=s.level_type,
+            label=s.label,
+            price=s.price,
+            zone_low=s.zone_low,
+            zone_high=s.zone_high,
+            distance_pct=s.distance_pct,
+            strength=s.strength,
+            test_count=s.test_count,
+            reasons=s.reasons,
+        )
+        for s in sr_res.supports
+    ]
+
+    resistances_schema = [
+        SRLevelSchema(
+            level_type=r.level_type,
+            label=r.label,
+            price=r.price,
+            zone_low=r.zone_low,
+            zone_high=r.zone_high,
+            distance_pct=r.distance_pct,
+            strength=r.strength,
+            test_count=r.test_count,
+            reasons=r.reasons,
+        )
+        for r in sr_res.resistances
+    ]
+
+    chart_data = []
+    for date, row in df.tail(100).iterrows():
+        date_str = date.strftime("%Y-%m-%d")
+        chart_data.append({
+            "time": date_str,
+            "open": round(float(row["open"]), 2),
+            "high": round(float(row["high"]), 2),
+            "low": round(float(row["low"]), 2),
+            "close": round(float(row["close"]), 2),
+            "volume": int(row["volume"]),
+        })
+
+    return StockDetailResponse(
+        symbol=sym,
+        price=dma_m.last_price,
+        dma_metrics=DMAMetricsSchema(**dma_m.__dict__),
+        supports=supports_schema,
+        resistances=resistances_schema,
+        volume_profile=VolumeProfileSchema(
+            poc=sr_res.volume_profile.poc,
+            vah=sr_res.volume_profile.vah,
+            val=sr_res.volume_profile.val,
+        ),
+        confluence_tags=sr_res.confluence_tags,
+        chart_data=chart_data,
+    )
