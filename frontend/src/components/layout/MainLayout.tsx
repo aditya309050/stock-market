@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 
 const NAV = [
-  { href: "/dashboard", label: "Dashboard" },
+  { href: "/dashboard", label: "⚡ Intraday Hub" },
   { href: "/dashboard/golden-cross", label: "🔥 Golden Cross Scanner" },
   { href: "/swing-trade", label: "📈 Swing Trade" },
   { href: "/sector-analysis", label: "📊 Sector Analysis" },

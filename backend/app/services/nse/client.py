@@ -22,9 +22,12 @@ NSE_HEADERS = {
 }
 
 TIMEFRAME_YF = {
-    "1d": {"interval": "1d", "period": "1y"},
+    "5m": {"interval": "5m", "period": "5d"},
+    "15m": {"interval": "15m", "period": "15d"},
+    "30m": {"interval": "30m", "period": "30d"},
     "1h": {"interval": "1h", "period": "60d"},
     "2h": {"interval": "1h", "period": "60d"},  # resampled from 1h
+    "1d": {"interval": "1d", "period": "1y"},
 }
 
 

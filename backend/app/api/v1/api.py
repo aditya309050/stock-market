@@ -9,6 +9,7 @@ from .endpoints import (
     sector_screener,
     golden_cross,
     swing_trade,
+    intraday,
 )
 
 api_router = APIRouter()
@@ -22,5 +23,6 @@ api_router.include_router(sector_screener.router, prefix="/sector-screener", tag
 api_router.include_router(dma_screener.router, prefix="/dma-screener", tags=["dma-screener"])
 api_router.include_router(golden_cross.router, prefix="/golden-cross", tags=["golden-cross"])
 api_router.include_router(swing_trade.router, prefix="/swing-trade", tags=["swing-trade"])
+api_router.include_router(intraday.router, prefix="/intraday", tags=["intraday"])
 
 
