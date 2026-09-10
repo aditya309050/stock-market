@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-4o-mini"
 
     DHAN_CLIENT_ID: str = ""
+    DHAN_API_KEY: str = ""
+    DHAN_API_SECRET: str = ""
     DHAN_ACCESS_TOKEN: str = ""
     DHAN_BASE_URL: str = "https://api.dhan.co/v2"
     DHAN_WS_URL: str = "wss://api-feed.dhan.co"
