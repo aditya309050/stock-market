@@ -27,7 +27,7 @@ TIMEFRAME_YF = {
     "30m": {"interval": "30m", "period": "30d"},
     "1h": {"interval": "1h", "period": "60d"},
     "2h": {"interval": "1h", "period": "60d"},  # resampled from 1h
-    "1d": {"interval": "1d", "period": "1y"},
+    "1d": {"interval": "1d", "period": "2y"},
 }
 
 
@@ -88,12 +88,17 @@ class NSEClient:
         except Exception:
             pass
 
-        # Fallback liquid NSE names
+        # Fallback liquid NSE names (Top active NIFTY liquid universe)
         return [
             "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "HINDUNILVR",
             "ITC", "SBIN", "BHARTIARTL", "KOTAKBANK", "LT", "AXISBANK",
             "ASIANPAINT", "MARUTI", "TITAN", "SUNPHARMA", "BAJFINANCE",
-            "WIPRO", "ULTRACEMCO", "NESTLEIND",
+            "WIPRO", "ULTRACEMCO", "NESTLEIND", "TATASTEEL",
+            "POWERGRID", "NTPC", "M&M", "ADANIENT", "ADANIPORTS", "COALINDIA",
+            "ONGC", "JSWSTEEL", "TECHM", "HCLTECH", "GRASIM",
+            "CIPLA", "APOLLOHOSP", "DIVISLAB", "EICHERMOT", "HEROMOTOCO",
+            "DRREDDY", "BPCL", "HINDALCO", "BRITANNIA", "TATACONSUM", "BEL",
+            "VBL", "TRENT", "HAL", "ZOMATO", "JIOFIN", "SBILIFE", "HDFCLIFE",
         ]
 
     def fetch_ohlc_sync(

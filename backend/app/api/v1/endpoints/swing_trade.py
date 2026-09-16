@@ -1,83 +1,112 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from datetime import datetime, timezone
+from typing import Any, Optional
 from fastapi import APIRouter, Query
 
 from app.schemas.swing_trade import SwingTradeItem, SwingTradeScanResponse
-from app.services.dhan.dhan_client import dhan_client
 from app.services.indicators.swing_engine import calculate_swing_metrics
 from app.services.nse.client import nse_client
 
 router = APIRouter()
 
+# In-memory scan cache: key -> (timestamp, response)
+_scan_cache: dict[str, tuple[datetime, SwingTradeScanResponse]] = {}
+CACHE_TTL_SECONDS = 90
+
+
+def _clean_symbol(sym: str) -> str:
+    s = sym.upper().strip().split("-")[0].replace(".NS", "")
+    return s
+
 
 @router.get("/scan", response_model=SwingTradeScanResponse)
 async def run_swing_trade_scan(
-    universe: str = Query("NIFTY 500", description="'NSE ALL', 'NIFTY 500', 'NIFTY 200', 'NIFTY 100', 'LIQUID'"),
+    universe: str = Query("NIFTY 500", description="'NSE ALL', 'NIFTY 500', 'NIFTY 200', 'NIFTY 100', 'NIFTY 50', 'LIQUID'"),
     timeframe: str = Query("15m", description="'5m', '15m', '30m', '1h', '1d'"),
     min_score: float = Query(0.0, ge=0.0, le=100.0),
-    symbol: str | None = Query(None, description="Scan a single stock symbol"),
+    symbol: Optional[str] = Query(None, description="Scan a single stock symbol"),
+    search: Optional[str] = Query(None, description="Search symbol or keyword"),
+    refresh: bool = Query(False, description="Force refresh cache"),
 ) -> SwingTradeScanResponse:
-
     """
     Scans selected universe using live tick/candle feed for Swing High/Low structure, HH+HL trends,
     support/resistance levels, volume ratio, and multi-timeframe swing scores.
+    Uses concurrency and smart caching for fast (<5s) response times.
     """
     try:
         min_score_val = float(min_score)
     except Exception:
         min_score_val = 0.0
 
-    sym_str = str(symbol) if symbol and not hasattr(symbol, 'default') else None
-    scrip_list: list[dict[str, Any]] = []
+    universe_key = universe.strip().upper()
+    timeframe_key = timeframe.strip()
+    sym_query = symbol.strip().upper() if symbol and not hasattr(symbol, "default") and str(symbol).strip() else None
+    search_query = search.strip().upper() if search and not hasattr(search, "default") and str(search).strip() else None
 
-    if sym_str:
-        scrip_list = [{"symbol": sym_str.upper()}]
-    elif universe.upper() in ["NSE ALL", "ALL"]:
+    # Check cache when running standard universe scan (without specific search)
+    cache_key = f"{universe_key}:{timeframe_key}:{min_score_val}"
+    now = datetime.now(timezone.utc)
+    if not refresh and not sym_query and not search_query and cache_key in _scan_cache:
+        cached_time, cached_resp = _scan_cache[cache_key]
+        if (now - cached_time).total_seconds() < CACHE_TTL_SECONDS:
+            return cached_resp
+
+    # Determine list of target symbols
+    target_symbols: list[str] = []
+
+    if sym_query:
+        target_symbols = [_clean_symbol(sym_query)]
+    elif search_query:
+        # User searched for a specific symbol or prefix
+        clean_q = _clean_symbol(search_query)
         try:
-            scrip_list = await dhan_client.fetch_scrip_master()
+            all_symbols = await nse_client.get_index_symbols(universe)
         except Exception:
-            pass
+            all_symbols = []
+        matched = [s for s in all_symbols if clean_q in s.upper()]
+        if not matched:
+            matched = [clean_q]
+        target_symbols = matched[:20]
     else:
+        # Standard universe scan: take top active liquid names
         try:
             symbols = await nse_client.get_index_symbols(universe)
-            if len(symbols) > 25:
-                scrip_list = [{"symbol": s} for s in symbols]
-            else:
-                scrip_list = await dhan_client.fetch_scrip_master()
         except Exception:
-            pass
+            symbols = []
 
-    if not scrip_list:
-        try:
-            scrip_list = await dhan_client.fetch_scrip_master()
-        except Exception:
-            symbols = await nse_client.get_index_symbols("NIFTY 500")
-            scrip_list = [{"symbol": s} for s in symbols]
+        if not symbols:
+            symbols = [
+                "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "SBIN",
+                "BHARTIARTL", "KOTAKBANK", "LT", "AXISBANK", "MARUTI", "TITAN",
+                "SUNPHARMA", "BAJFINANCE", "TATAMOTORS", "TATASTEEL", "NTPC",
+                "BEL", "HAL", "ZOMATO", "COALINDIA", "ONGC", "JSWSTEEL", "TECHM",
+            ]
 
-    # Concurrently process target pool
-    sem = asyncio.Semaphore(35)
-    target_pool = scrip_list[:1000]
+        # Scan top 35 symbols for snappy response time (< 5 seconds)
+        target_symbols = [_clean_symbol(s) for s in symbols if s and len(s) >= 2][:35]
 
-    async def process_one(item: dict[str, Any]) -> SwingTradeItem | None:
-        sym = item.get("symbol", "")
-        if not sym:
+    # Concurrently process symbols with bounded semaphore
+    sem = asyncio.Semaphore(15)
+
+    async def process_one(sym: str) -> SwingTradeItem | None:
+        if not sym or len(sym) < 2:
             return None
         async with sem:
             try:
-                df = await dhan_client.fetch_historical_daily(sym, limit=120)
-                if df.empty or len(df) < 30:
+                # Fetch OHLC candles for the actual requested timeframe
+                df = await nse_client.fetch_ohlc(sym, timeframe=timeframe_key, limit=80)
+                if df is None or df.empty or len(df) < 15:
                     return None
 
-                metrics = calculate_swing_metrics(df, symbol=sym, timeframe=timeframe)
+                metrics = calculate_swing_metrics(df, symbol=sym, timeframe=timeframe_key)
                 if not metrics or metrics.swing_score < min_score_val:
                     return None
 
-
                 return SwingTradeItem(
                     symbol=sym,
-                    timeframe=timeframe,
+                    timeframe=timeframe_key,
                     last_price=metrics.last_price,
                     volume=metrics.volume,
                     volume_ratio=metrics.volume_ratio,
@@ -100,7 +129,7 @@ async def run_swing_trade_scan(
             except Exception:
                 return None
 
-    tasks = [process_one(s) for s in target_pool]
+    tasks = [process_one(s) for s in target_symbols]
     raw_results = await asyncio.gather(*tasks)
     valid_results = [r for r in raw_results if r is not None]
 
@@ -111,11 +140,17 @@ async def run_swing_trade_scan(
     pullbacks = [r for r in valid_results if r.setup_category == "PULLBACK"]
     near_res = [r for r in valid_results if r.setup_category == "NEAR RESISTANCE"]
 
-    return SwingTradeScanResponse(
-        scanned=len(target_pool),
+    response = SwingTradeScanResponse(
+        scanned=len(target_symbols),
         matched=len(valid_results),
         breakout_candidates=breakouts,
         pullback_setups=pullbacks,
         near_resistance=near_res,
         results=valid_results[:30],
     )
+
+    # Cache standard universe scan results
+    if not sym_query and not search_query:
+        _scan_cache[cache_key] = (now, response)
+
+    return response

@@ -48,16 +48,25 @@ export default function SwingTradePage() {
   const [data, setData] = useState<SwingTradeScanResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchScan = async () => {
+  const fetchScan = async (forceRefresh = false) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(
-        `${API_BASE}/swing-trade/scan?universe=${encodeURIComponent(
-          universe
-        )}&timeframe=${timeframe}`
-      );
-      if (!res.ok) throw new Error("Failed to fetch Swing Trade Scan");
+      const params = new URLSearchParams({
+        universe,
+        timeframe,
+      });
+      if (forceRefresh) {
+        params.set("refresh", "true");
+      }
+      if (searchQuery.trim()) {
+        params.set("search", searchQuery.trim());
+      }
+      const res = await fetch(`${API_BASE}/swing-trade/scan?${params.toString()}`);
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => "");
+        throw new Error(errorText || "Failed to fetch Swing Trade Scan");
+      }
       const json = await res.json();
 
       setData(json);
@@ -100,9 +109,9 @@ export default function SwingTradePage() {
 
           <div className="flex gap-3">
             <button
-              onClick={fetchScan}
+              onClick={() => fetchScan(true)}
               disabled={loading}
-              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-medium text-xs rounded-xl transition-colors flex items-center gap-2"
+              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-medium text-xs rounded-xl transition-colors flex items-center gap-2 cursor-pointer"
             >
               🔄 Refresh Scanner
             </button>
@@ -145,19 +154,39 @@ export default function SwingTradePage() {
             <label className="text-xs text-zinc-400 block mb-1.5 font-medium">
               Search Symbol (e.g. MIDHANI, RELIANCE)
             </label>
-            <input
-              type="text"
-              placeholder="Search symbol..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3.5 py-2 text-white text-xs uppercase focus:outline-none focus:border-blue-500 placeholder-zinc-500"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search symbol (Press Enter to scan)..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    fetchScan(true);
+                  }
+                }}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3.5 py-2 text-white text-xs uppercase focus:outline-none focus:border-blue-500 placeholder-zinc-500 pr-16"
+              />
+              <button
+                onClick={() => fetchScan(true)}
+                disabled={loading}
+                className="absolute right-1.5 top-1.5 bottom-1.5 px-2.5 bg-blue-600 hover:bg-blue-500 text-[11px] font-semibold text-white rounded-lg flex items-center justify-center transition-colors disabled:opacity-50"
+              >
+                Scan
+              </button>
+            </div>
           </div>
         </div>
 
         {error && (
-          <div className="bg-red-950/40 border border-red-800 text-red-300 rounded-xl p-4 text-sm">
-            {error}
+          <div className="bg-red-950/40 border border-red-800 text-red-300 rounded-xl p-4 text-sm flex items-center justify-between gap-4">
+            <span>{error}</span>
+            <button
+              onClick={() => fetchScan(true)}
+              className="px-3 py-1 bg-red-800 hover:bg-red-700 text-white text-xs rounded-lg font-medium transition-colors"
+            >
+              Retry
+            </button>
           </div>
         )}
 

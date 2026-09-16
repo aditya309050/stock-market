@@ -221,7 +221,7 @@ async def get_stock_detail_analysis(symbol: str):
     Full single stock analysis: live OHLC, 20/50/200 DMAs, S1-S3 / R1-R3 strength levels, Volume Profile, Confluence tags, and Chart Series.
     """
     sym = symbol.upper().strip()
-    df = await nse_client.fetch_ohlc(sym, timeframe="1d", limit=150)
+    df = await nse_client.fetch_ohlc(sym, timeframe="1d", limit=400)
     if df.empty or len(df) < 20:
         raise HTTPException(status_code=404, detail=f"No market data found for {sym}")
 
@@ -261,9 +261,16 @@ async def get_stock_detail_analysis(symbol: str):
         for r in sr_res.resistances
     ]
 
+    sma20 = df["close"].rolling(20).mean()
+    sma50 = df["close"].rolling(50).mean()
+    sma200 = df["close"].rolling(200).mean()
+
     chart_data = []
-    for date, row in df.tail(100).iterrows():
+    for date, row in df.tail(120).iterrows():
         date_str = date.strftime("%Y-%m-%d")
+        v20 = float(sma20.loc[date]) if (date in sma20.index and pd.notna(sma20.loc[date])) else None
+        v50 = float(sma50.loc[date]) if (date in sma50.index and pd.notna(sma50.loc[date])) else None
+        v200 = float(sma200.loc[date]) if (date in sma200.index and pd.notna(sma200.loc[date])) else None
         chart_data.append({
             "time": date_str,
             "open": round(float(row["open"]), 2),
@@ -271,6 +278,9 @@ async def get_stock_detail_analysis(symbol: str):
             "low": round(float(row["low"]), 2),
             "close": round(float(row["close"]), 2),
             "volume": int(row["volume"]),
+            "dma20": round(v20, 2) if v20 is not None else None,
+            "dma50": round(v50, 2) if v50 is not None else None,
+            "dma200": round(v200, 2) if v200 is not None else None,
         })
 
     return StockDetailResponse(
