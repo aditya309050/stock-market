@@ -55,8 +55,8 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen w-full bg-[#0a0b0e] text-white flex flex-col lg:flex-row font-sans selection:bg-[#c4b5fd] selection:text-[#0a0b0e] overflow-x-hidden">
       
-      {/* ── LEFT 50%: Hero & Register Form ───────────────────────────────── */}
-      <div className="w-full lg:w-1/2 min-h-screen flex flex-col justify-between p-6 sm:p-10 lg:p-14 xl:p-16 bg-[#0e1017] relative z-10 border-r border-white/10">
+      {/* ── LEFT 45%: Hero & Register Form ───────────────────────────────── */}
+      <div className="w-full lg:w-[45%] min-h-screen flex flex-col justify-between p-6 sm:p-8 lg:p-10 xl:p-14 bg-[#0e1017] relative z-10 border-r border-white/10">
         
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_20%_20%,rgba(196,181,253,0.05)_0%,transparent_60%)] pointer-events-none" />
 
@@ -200,8 +200,8 @@ export default function RegisterPage() {
         </footer>
       </div>
 
-      {/* ── RIGHT 50%: 100% Full-bleed Image ─────────────────────────────────── */}
-      <div className="hidden lg:block lg:w-1/2 min-h-screen relative overflow-hidden bg-[#121520]">
+      {/* ── RIGHT 55%: 100% Full-bleed Image ─────────────────────────────────── */}
+      <div className="hidden lg:block lg:w-[55%] min-h-screen relative overflow-hidden bg-[#121520]">
         <img
           src="/editorial-trader.jpg"
           alt="Trader Discovering Market Breakouts"

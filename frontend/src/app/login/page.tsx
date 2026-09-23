@@ -8,8 +8,8 @@ import { ApiError } from "@/lib/api";
 export default function LoginPage() {
   const { login, register } = useAuth();
   const [mode, setMode] = useState<"login" | "register">("login");
-  const [email, setEmail] = useState("adityaraj309050@gmail.com");
-  const [password, setPassword] = useState("password123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
@@ -54,17 +54,11 @@ export default function LoginPage() {
     }
   };
 
-  const handleQuickDemo = () => {
-    setEmail("adityaraj309050@gmail.com");
-    setPassword("password123");
-    setError("");
-  };
-
   return (
     <div className="min-h-screen w-full bg-[#0a0b0e] text-white flex flex-col lg:flex-row font-sans selection:bg-[#c4b5fd] selection:text-[#0a0b0e] overflow-x-hidden">
       
-      {/* ── LEFT 50%: Hero, Form & Minimalist Controls ─────────────────────── */}
-      <div className="w-full lg:w-1/2 min-h-screen flex flex-col justify-between p-6 sm:p-10 lg:p-14 xl:p-16 bg-[#0e1017] relative z-10 border-r border-white/10">
+      {/* ── LEFT 45%: Hero, Form & Minimalist Controls ─────────────────────── */}
+      <div className="w-full lg:w-[45%] min-h-screen flex flex-col justify-between p-6 sm:p-8 lg:p-10 xl:p-14 bg-[#0e1017] relative z-10 border-r border-white/10">
         
         {/* Subtle Ambient Glow */}
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_20%_20%,rgba(196,181,253,0.05)_0%,transparent_60%)] pointer-events-none" />
@@ -242,20 +236,6 @@ export default function LoginPage() {
               </button>
             </form>
 
-            {/* Fast Autofill Helper */}
-            {mode === "login" && (
-              <div className="pt-2 flex items-center justify-between text-xs border-t border-white/5">
-                <span className="text-zinc-500 text-[11px]">Testing demo account?</span>
-                <button
-                  type="button"
-                  onClick={handleQuickDemo}
-                  className="text-[#c4b5fd] hover:text-[#ddd6fe] font-bold text-[11px] underline underline-offset-2 cursor-pointer"
-                >
-                  Autofill Credentials
-                </button>
-              </div>
-            )}
-
           </div>
 
         </div>
@@ -268,10 +248,10 @@ export default function LoginPage() {
 
       </div>
 
-      {/* ── RIGHT 50%: 100% Full-bleed Image ─────────────────────────────────── */}
-      <div className="hidden lg:block lg:w-1/2 min-h-screen relative overflow-hidden bg-[#121520]">
+      {/* ── RIGHT 55%: 100% Full-bleed Image ─────────────────────────────────── */}
+      <div className="hidden lg:block lg:w-[55%] min-h-screen relative overflow-hidden bg-[#121520]">
         
-        {/* Full 50% Image Edge-to-Edge */}
+        {/* Full 60% Image Edge-to-Edge */}
         <img
           src="/editorial-trader.jpg"
           alt="Trader Discovering Market Breakouts"
