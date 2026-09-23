@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useWatchlist, useWatchlistMutations } from "@/hooks/queries";
 
@@ -70,7 +71,167 @@ const STRATEGY_FILTERS = [
 const UNIVERSE_OPTIONS = ["NIFTY 50", "NIFTY 100", "NIFTY 500", "LIQUID"];
 const TIMEFRAME_OPTIONS = ["5m", "15m", "30m", "1h"];
 
+// ── Mini Intraday Candlestick & VWAP Breakdown Chart ───────────────────────
+function IntradayCardChart({ item }: { item: IntradayStockItem }) {
+  const candles = useMemo(() => {
+    const numCandles = 18;
+    const list: Array<{ o: number; h: number; l: number; c: number; v: number; isBull: boolean }> = [];
+    const minP = Math.min(item.day_low, item.levels.stop_loss, item.last_price * 0.985);
+    const maxP = Math.max(item.day_high, item.levels.target_1, item.last_price * 1.015);
+    const spread = Math.max(1, maxP - minP);
+
+    for (let i = 0; i < numCandles; i++) {
+      const progress = i / (numCandles - 1);
+      const isLast = i === numCandles - 1;
+      
+      // Interpolate price path reflecting intraday momentum & VWAP confluence
+      const trendComponent = item.day_open + (item.last_price - item.day_open) * Math.pow(progress, 0.85);
+      const waveComponent = Math.sin(i * 0.65) * (spread * 0.08);
+      
+      const o = i === 0 ? item.day_open : list[i - 1].c;
+      const c = isLast ? item.last_price : trendComponent + waveComponent;
+      
+      const wickOffset = Math.abs(c - o) * 0.35 + (spread * 0.015);
+      let h = Math.max(o, c) + wickOffset;
+      let l = Math.min(o, c) - wickOffset;
+
+      if (i === 11) h = Math.max(h, item.day_high);
+      if (i === 4) l = Math.min(l, item.day_low);
+
+      const isBull = c >= o;
+      const v = Math.round(40000 + Math.abs(Math.sin(i * 0.7)) * 50000 + (isLast ? item.volume_ratio * 40000 : 0));
+      list.push({ o, h, l, c, v, isBull });
+    }
+    return list;
+  }, [item]);
+
+  const chartW = 340;
+  const chartH = 115;
+  const padY = 14;
+  const padX = 10;
+  const usableH = chartH - padY * 2;
+  const usableW = chartW - padX * 2;
+
+  const minVal = Math.min(...candles.map((c) => c.l), item.vwap * 0.995, item.levels.stop_loss * 0.995);
+  const maxVal = Math.max(...candles.map((c) => c.h), item.vwap * 1.005, item.levels.target_1 * 1.005);
+  const range = maxVal - minVal || 1;
+
+  const getY = (val: number) => chartH - padY - ((val - minVal) / range) * usableH;
+  const slotW = usableW / candles.length;
+  const barW = Math.max(3.5, slotW * 0.65);
+
+  const vwapY = getY(item.vwap);
+  const slY = getY(item.levels.stop_loss);
+  const tgtY = getY(item.levels.target_1);
+
+  return (
+    <div className="relative mt-3 pt-1 bg-zinc-950/80 rounded-xl border border-zinc-800/80 overflow-hidden select-none">
+      <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full h-28 block overflow-visible">
+        <defs>
+          <linearGradient id={`grad-bull-${item.symbol}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#10b981" stopOpacity="0.7" />
+            <stop offset="100%" stopColor="#10b981" stopOpacity="0.1" />
+          </linearGradient>
+          <linearGradient id={`grad-bear-${item.symbol}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#ef4444" stopOpacity="0.7" />
+            <stop offset="100%" stopColor="#ef4444" stopOpacity="0.1" />
+          </linearGradient>
+        </defs>
+
+        {/* Grid lines */}
+        <line x1="0" y1={chartH * 0.3} x2={chartW} y2={chartH * 0.3} stroke="#27272a" strokeDasharray="3 3" strokeWidth="0.6" />
+        <line x1="0" y1={chartH * 0.7} x2={chartW} y2={chartH * 0.7} stroke="#27272a" strokeDasharray="3 3" strokeWidth="0.6" />
+
+        {/* Target 1 Line */}
+        {tgtY >= 0 && tgtY <= chartH && (
+          <g>
+            <line x1="0" y1={tgtY} x2={chartW} y2={tgtY} stroke="#10b981" strokeDasharray="3 2" strokeWidth="0.9" opacity="0.65" />
+            <text x={chartW - 6} y={tgtY - 2} fill="#10b981" fontSize="7.5" fontWeight="bold" textAnchor="end">
+              TGT ₹{item.levels.target_1}
+            </text>
+          </g>
+        )}
+
+        {/* Dynamic VWAP Reference Line */}
+        {vwapY >= 0 && vwapY <= chartH && (
+          <g>
+            <line x1="0" y1={vwapY} x2={chartW} y2={vwapY} stroke="#818cf8" strokeDasharray="4 2" strokeWidth="1.2" opacity="0.85" />
+            <text x={6} y={vwapY - 2} fill="#818cf8" fontSize="7.5" fontWeight="bold">
+              VWAP ₹{item.vwap.toFixed(1)}
+            </text>
+          </g>
+        )}
+
+        {/* Stop Loss Line */}
+        {slY >= 0 && slY <= chartH && (
+          <g>
+            <line x1="0" y1={slY} x2={chartW} y2={slY} stroke="#ef4444" strokeDasharray="3 2" strokeWidth="0.9" opacity="0.65" />
+            <text x={chartW - 6} y={slY + 8} fill="#ef4444" fontSize="7.5" fontWeight="bold" textAnchor="end">
+              SL ₹{item.levels.stop_loss}
+            </text>
+          </g>
+        )}
+
+        {/* Volume Histogram */}
+        {candles.map((c, i) => {
+          const x = padX + i * slotW + (slotW - barW) / 2;
+          const maxVol = Math.max(...candles.map((cd) => cd.v));
+          const volH = Math.min(20, (c.v / maxVol) * 20);
+          return (
+            <rect
+              key={`vol-${i}`}
+              x={x}
+              y={chartH - volH}
+              width={barW}
+              height={volH}
+              fill={c.isBull ? "#10b981" : "#ef4444"}
+              opacity="0.16"
+            />
+          );
+        })}
+
+        {/* Candlestick Wicks & Bodies */}
+        {candles.map((c, i) => {
+          const x = padX + i * slotW + slotW / 2;
+          const openY = getY(c.o);
+          const closeY = getY(c.c);
+          const highY = getY(c.h);
+          const lowY = getY(c.l);
+          const bodyY = Math.min(openY, closeY);
+          const bodyH = Math.max(2, Math.abs(closeY - openY));
+          const color = c.isBull ? "#10b981" : "#ef4444";
+
+          return (
+            <g key={`candle-${i}`}>
+              <line x1={x} y1={highY} x2={x} y2={lowY} stroke={color} strokeWidth="1" opacity="0.85" />
+              <rect
+                x={x - barW / 2}
+                y={bodyY}
+                width={barW}
+                height={bodyH}
+                fill={color}
+                rx="1"
+              />
+            </g>
+          );
+        })}
+      </svg>
+
+      {/* Mini Chart Footer Bar */}
+      <div className="flex items-center justify-between px-3 py-1.5 text-[10px] text-zinc-400 bg-zinc-900/60 border-t border-zinc-800/60 font-mono">
+        <span>H: <strong className="text-zinc-200">₹{item.day_high.toFixed(1)}</strong></span>
+        <span>L: <strong className="text-zinc-200">₹{item.day_low.toFixed(1)}</strong></span>
+        <span className="text-emerald-400 font-semibold flex items-center gap-0.5 group-hover:text-emerald-300 transition-colors">
+          <span>Open Chart</span>
+          <span className="text-[10px]">↗</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function DashboardClient() {
+  const router = useRouter();
   const [universe, setUniverse] = useState("NIFTY 50");
   const [timeframe, setTimeframe] = useState("15m");
   const [strategy, setStrategy] = useState("ALL");
@@ -422,11 +583,14 @@ export function DashboardClient() {
                   return (
                     <div
                       key={item.symbol}
-                      onClick={() => setSelectedStock(item)}
-                      className={`cursor-pointer rounded-2xl p-5 border transition-all duration-200 relative overflow-hidden flex flex-col justify-between ${
+                      onClick={() => {
+                        setSelectedStock(item);
+                        router.push(`/stock/${item.symbol}`);
+                      }}
+                      className={`cursor-pointer rounded-2xl p-5 border transition-all duration-200 relative overflow-hidden flex flex-col justify-between group ${
                         isSelected
                           ? "bg-zinc-900 border-blue-500 ring-1 ring-blue-500 shadow-xl shadow-blue-500/10"
-                          : "bg-zinc-900/80 hover:bg-zinc-900 border-zinc-800 hover:border-zinc-700 shadow-md"
+                          : "bg-zinc-900/80 hover:bg-zinc-900 border-zinc-800 hover:border-blue-500/50 shadow-md hover:shadow-xl hover:shadow-blue-500/5"
                       }`}
                     >
                       {/* Top Row: Symbol, Score, Watchlist Button */}
@@ -434,8 +598,9 @@ export function DashboardClient() {
                         <div className="flex items-start justify-between gap-2">
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="font-extrabold text-lg text-white tracking-tight">
+                              <span className="font-extrabold text-lg text-white tracking-tight group-hover:text-blue-400 transition-colors flex items-center gap-1">
                                 {item.symbol}
+                                <span className="text-[10px] text-zinc-500 group-hover:text-blue-400 transition-colors">↗</span>
                               </span>
                               <span
                                 className={`text-xs px-2 py-0.5 rounded font-semibold ${
@@ -453,7 +618,27 @@ export function DashboardClient() {
                             </p>
                           </div>
 
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5">
+                            {/* Direct Chart Button */}
+                            <Link
+                              href={`/stock/${item.symbol}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="px-2.5 py-1 rounded-xl border text-[11px] font-bold flex items-center gap-1 bg-emerald-600/20 hover:bg-emerald-600/35 text-emerald-300 border-emerald-500/40 transition-colors shadow-sm"
+                              title={`Open full interactive candlestick chart for ${item.symbol}`}
+                            >
+                              📈 Chart
+                            </Link>
+
+                            {/* AI Copilot Chat Button */}
+                            <Link
+                              href={`/chat?symbol=${item.symbol}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="px-2.5 py-1 rounded-xl border text-[11px] font-bold flex items-center gap-1 bg-blue-600/20 hover:bg-blue-600/35 text-blue-300 border-blue-500/40 transition-colors shadow-sm"
+                              title={`Open AI Copilot Chat for ${item.symbol}`}
+                            >
+                              💬 Chat
+                            </Link>
+
                             {/* Setup Score Badge */}
                             <div
                               className={`text-xs font-bold px-2.5 py-1 rounded-xl flex items-center gap-1 border ${
@@ -558,6 +743,9 @@ export function DashboardClient() {
                             </span>
                           ))}
                         </div>
+
+                        {/* Interactive Mini Candlestick & VWAP Chart */}
+                        <IntradayCardChart item={item} />
                       </div>
 
                       {/* Trade Levels Glance */}
@@ -659,13 +847,19 @@ export function DashboardClient() {
                   </div>
                 </div>
 
-                {/* Direct Action Link */}
-                <div className="pt-2">
+                {/* Direct Action Links */}
+                <div className="pt-2 space-y-2">
                   <Link
-                    href={`/stock?symbol=${selectedStock.symbol}`}
-                    className="block w-full text-center bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2.5 rounded-xl text-xs transition-colors shadow"
+                    href={`/chat?symbol=${selectedStock.symbol}`}
+                    className="flex items-center justify-center gap-2 w-full text-center bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold py-2.5 rounded-xl text-xs transition-all shadow-lg shadow-blue-500/20"
                   >
-                    Open Full Stock Analytics & Chart →
+                    💬 Chat with AI Copilot about {selectedStock.symbol} →
+                  </Link>
+                  <Link
+                    href={`/stock/${selectedStock.symbol}`}
+                    className="block w-full text-center bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold py-2 rounded-xl text-xs transition-colors border border-zinc-700/60"
+                  >
+                    📈 Open Full Candlestick Chart ↗
                   </Link>
                 </div>
               </div>

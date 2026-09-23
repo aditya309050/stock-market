@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { AICopilot } from "@/components/chat/AICopilot";
 
@@ -27,7 +28,9 @@ export default function ChatPage() {
         
         {/* Main Chat Area */}
         <div className="flex-1 h-[calc(100vh-4rem)]">
-          <AICopilot />
+          <Suspense fallback={<div className="p-8 text-zinc-500">Loading AI Copilot...</div>}>
+            <AICopilot />
+          </Suspense>
         </div>
       </div>
     </MainLayout>
