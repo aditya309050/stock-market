@@ -66,24 +66,24 @@ export default function DMAScreenerPage() {
     <MainLayout>
       <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
         {/* Header Bar */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-zinc-900/90 border border-zinc-800 rounded-2xl p-4 sm:p-6 shadow-xl">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white flex items-center gap-2">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-white flex flex-wrap items-center gap-2">
               <span>🔥 Real-Time DMA &amp; S/R Screener</span>
               <span className="px-2.5 py-0.5 text-xs bg-emerald-950 text-emerald-400 border border-emerald-800 rounded-full font-normal">
                 LIVE
               </span>
             </h1>
-            <p className="text-zinc-400 text-xs md:text-sm mt-1">
+            <p className="text-zinc-400 text-xs sm:text-sm mt-1">
               Broker API market data · 200+ candles · Dynamic Support &amp; Resistance · Confluence Scoring
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
             <select
               value={index}
               onChange={(e) => setIndex(e.target.value)}
-              className="bg-zinc-950 border border-zinc-800 text-white rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:border-blue-500"
+              className="flex-1 sm:flex-initial bg-zinc-950 border border-zinc-800 text-white rounded-xl px-3 py-2.5 text-xs font-medium focus:outline-none focus:border-blue-500"
             >
               <option value="NIFTY 500">NIFTY 500 Universe</option>
               <option value="NIFTY 100">NIFTY 100 Universe</option>
@@ -93,22 +93,22 @@ export default function DMAScreenerPage() {
             <button
               onClick={fetchScan}
               disabled={loading}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-medium text-xs rounded-xl transition-colors shrink-0"
+              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-xs rounded-xl transition-all shadow-md shrink-0 cursor-pointer"
             >
-              {loading ? "Scanning Universe..." : "Refresh Scanner"}
+              {loading ? "Scanning..." : "Refresh Scanner"}
             </button>
           </div>
         </div>
 
         {/* Setup Filter Pills */}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
           {FILTER_OPTIONS.map((f) => (
             <button
               key={f.id}
               onClick={() => setFilter(f.id)}
-              className={`px-3.5 py-2 text-xs font-semibold rounded-xl border transition-all ${
+              className={`px-3.5 py-2 text-xs font-semibold rounded-xl border transition-all whitespace-nowrap cursor-pointer shrink-0 ${
                 filter === f.id
-                  ? "bg-blue-600 border-blue-500 text-white shadow-md scale-105"
+                  ? "bg-blue-600 border-blue-500 text-white shadow-md scale-[1.02]"
                   : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white"
               }`}
             >

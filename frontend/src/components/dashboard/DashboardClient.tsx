@@ -158,10 +158,10 @@ export function DashboardClient() {
     <MainLayout>
       <div className="p-4 md:p-8 max-w-[1550px] mx-auto space-y-6">
         {/* Top Ticker / Header Bar */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-zinc-900/90 border border-zinc-800 backdrop-blur-md rounded-2xl p-5 shadow-xl">
-          <div className="space-y-1">
-            <div className="flex items-center gap-3">
-              <span className="relative flex h-3 w-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-zinc-900/90 border border-zinc-800 backdrop-blur-md rounded-2xl p-4 sm:p-5 shadow-xl">
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <span className="relative flex h-3 w-3 shrink-0">
                 {isMarketLive ? (
                   <>
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -171,11 +171,11 @@ export function DashboardClient() {
                   <span className="relative inline-flex rounded-full h-3 w-3 bg-zinc-500"></span>
                 )}
               </span>
-              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
                 ⚡ Intraday Trading Hub
               </h1>
               <span
-                className={`text-xs px-2.5 py-1 rounded-full font-semibold border ${
+                className={`text-[11px] sm:text-xs px-2.5 py-1 rounded-full font-semibold border ${
                   isMarketLive
                     ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
                     : "bg-zinc-800 text-zinc-400 border-zinc-700"
@@ -190,14 +190,14 @@ export function DashboardClient() {
           </div>
 
           {/* Controls: Refresh, Timer, Universe */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded-xl p-1 text-xs">
-              <span className="text-zinc-500 px-2 font-medium">Universe:</span>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded-xl p-1 text-xs overflow-x-auto max-w-full">
+              <span className="text-zinc-500 px-1.5 sm:px-2 font-medium shrink-0">Universe:</span>
               {UNIVERSE_OPTIONS.map((u) => (
                 <button
                   key={u}
                   onClick={() => setUniverse(u)}
-                  className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-lg font-medium transition-all shrink-0 cursor-pointer ${
                     universe === u
                       ? "bg-blue-600 text-white shadow"
                       : "text-zinc-400 hover:text-white"
