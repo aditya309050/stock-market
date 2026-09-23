@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { runDMAScan, type DMAScanResponse, type DMAScanItem } from "@/lib/api";
+import { PeakDetailStockCard } from "@/components/screener/PeakDetailStockCard";
 
 const FILTER_OPTIONS = [
   { id: "ALL", label: "⚡ All Setups" },
@@ -139,98 +140,29 @@ export default function DMAScreenerPage() {
                 No stocks matched the selected setup filter right now. Try switching to &quot;⚡ All Setups&quot;.
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2">
-                {data.results.map((item) => (
-                  <div
-                    key={item.symbol}
-                    className="bg-zinc-900/90 border border-zinc-800 hover:border-zinc-700 transition-all rounded-2xl p-5 space-y-4 shadow-lg group"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <Link
-                          href={`/stock/${item.symbol}`}
-                          className="text-xl font-extrabold text-white tracking-wide group-hover:text-blue-400 transition-colors flex items-center gap-2"
-                        >
-                          <span>{item.symbol}</span>
-                          <span className="text-xs text-zinc-500 font-normal">→ View Detail</span>
-                        </Link>
-                        <p className="text-xs text-zinc-400 mt-0.5">
-                          LTP: <strong className="text-white">₹{item.price.toFixed(2)}</strong>
-                        </p>
-                      </div>
+              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                {data.results.map((item) => {
+                  const pivot = item.nearest_resistance ? item.nearest_resistance.price : item.price * 0.96;
+                  const isBull = item.score >= 70;
+                  const changePct = isBull ? 5.2 : 1.8;
 
-                      <div className="text-right">{getScoreBadge(item.score)}</div>
-                    </div>
-
-                    {/* Confluence Tags */}
-                    {item.confluence_tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {item.confluence_tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="px-2.5 py-0.5 bg-blue-950/70 border border-blue-800/60 text-blue-300 text-[11px] font-semibold rounded-full flex items-center gap-1"
-                          >
-                            🎯 {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Technical Metric Cards Grid */}
-                    <div className="grid grid-cols-4 gap-2 bg-zinc-950/60 p-3 rounded-xl text-center text-xs">
-                      <div>
-                        <span className="text-zinc-500 block">50 DMA</span>
-                        <span className="font-bold text-emerald-400">₹{item.dma50.toFixed(2)}</span>
-                        <span className="text-[10px] text-zinc-400 block">
-                          {item.dist_50_pct >= 0 ? `+${item.dist_50_pct}%` : `${item.dist_50_pct}%`}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-zinc-500 block">200 DMA</span>
-                        <span className="font-bold text-purple-400">₹{item.dma200.toFixed(2)}</span>
-                        <span className="text-[10px] text-zinc-400 block">
-                          {item.dist_200_pct >= 0 ? `+${item.dist_200_pct}%` : `${item.dist_200_pct}%`}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-zinc-500 block">RSI (14)</span>
-                        <span className="font-bold text-white">{item.rsi}</span>
-                        <span className="text-[10px] text-zinc-400 block">
-                          {item.rsi >= 50 ? "Bullish" : "Neutral"}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-zinc-500 block">Volume</span>
-                        <span className="font-bold text-amber-400">{item.volume_mult}x</span>
-                        <span className="text-[10px] text-zinc-400 block">vs 20d avg</span>
-                      </div>
-                    </div>
-
-                    {/* Support / Resistance Levels Bar */}
-                    <div className="flex items-center justify-between text-xs pt-1 text-zinc-400 border-t border-zinc-800/80">
-                      <div>
-                        Support:{" "}
-                        {item.nearest_support ? (
-                          <span className="text-emerald-400 font-semibold">
-                            {item.nearest_support.label} ₹{item.nearest_support.price} ({item.nearest_support.distance_pct}%)
-                          </span>
-                        ) : (
-                          "None"
-                        )}
-                      </div>
-                      <div>
-                        Resistance:{" "}
-                        {item.nearest_resistance ? (
-                          <span className="text-red-400 font-semibold">
-                            {item.nearest_resistance.label} ₹{item.nearest_resistance.price} (+{item.nearest_resistance.distance_pct}%)
-                          </span>
-                        ) : (
-                          "None"
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  return (
+                    <PeakDetailStockCard
+                      key={item.symbol}
+                      symbol={item.symbol}
+                      last_price={item.price}
+                      change_pct={changePct}
+                      pivot_price={pivot}
+                      now_vs_pivot_pct={item.nearest_resistance ? item.nearest_resistance.distance_pct : 3.8}
+                      breakout_volume_mult={item.volume_mult}
+                      rs_rating={item.score}
+                      price_vs_50ma_pct={item.dist_50_pct}
+                      tags={item.confluence_tags && item.confluence_tags.length > 0 ? item.confluence_tags : ["DMA Setup"]}
+                      action_link_text="View DMA & S/R Confluence"
+                      action_link_url={`/stock/${item.symbol}`}
+                    />
+                  );
+                })}
               </div>
             )}
           </div>

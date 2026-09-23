@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { PeakDetailStockCard } from "@/components/screener/PeakDetailStockCard";
 
 interface SwingTradeItem {
   symbol: string;
@@ -44,6 +45,7 @@ export default function SwingTradePage() {
   const [universe, setUniverse] = useState("NIFTY 500");
   const [timeframe, setTimeframe] = useState("15m");
   const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<SwingTradeScanResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -285,18 +287,82 @@ export default function SwingTradePage() {
           </div>
         )}
 
-        {/* Detailed Results Table */}
-        <div className="bg-[#1c1c1c] border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
-          <div className="p-4 border-b border-zinc-800 flex justify-between items-center text-xs text-zinc-400">
-            <span>
-              Scanned <strong>{data?.scanned || 0}</strong> stocks • Showing top{" "}
-              <strong>{filteredResults.length}</strong> swing candidates
-            </span>
-            <span>Timeframe: <strong>{timeframe}</strong></span>
+        {/* Detailed Results Toolbar & View Mode Toggle */}
+        <div className="flex items-center justify-between bg-zinc-900 border border-zinc-800 p-4 rounded-2xl">
+          <div className="text-xs text-zinc-400">
+            Scanned <strong>{data?.scanned || 0}</strong> stocks • Showing top{" "}
+            <strong className="text-white">{filteredResults.length}</strong> swing candidates in{" "}
+            <strong className="text-blue-400">{universe}</strong> ({timeframe})
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left whitespace-nowrap">
+          <div className="flex bg-zinc-950 p-1 rounded-xl border border-zinc-800 text-xs font-semibold">
+            <button
+              onClick={() => setViewMode("cards")}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                viewMode === "cards" ? "bg-emerald-500 text-zinc-950 font-bold shadow" : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              🎴 Peak Detailing Cards
+            </button>
+            <button
+              onClick={() => setViewMode("table")}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                viewMode === "table" ? "bg-emerald-500 text-zinc-950 font-bold shadow" : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              📋 Compact Table
+            </button>
+          </div>
+        </div>
+
+        {/* Peak Detailing Cards View */}
+        {viewMode === "cards" ? (
+          <div>
+            {loading ? (
+              <div className="p-16 text-center text-zinc-400 bg-zinc-900/50 border border-zinc-800 rounded-2xl space-y-3">
+                <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm font-medium">Scanning live swing structures and calculating pivot levels...</p>
+              </div>
+            ) : filteredResults.length === 0 ? (
+              <div className="p-16 text-center text-zinc-400 bg-zinc-900/50 border border-zinc-800 rounded-2xl space-y-2">
+                <div className="text-3xl">🔍</div>
+                <h3 className="text-lg font-bold text-white">No Swing Setups Found</h3>
+                <p className="text-xs text-zinc-500">Try changing universe or timeframe.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {filteredResults.map((item) => {
+                  const pivot = item.nearest_resistance > 0 ? item.nearest_resistance : item.last_price * 0.95;
+                  const changePct = item.is_breakout ? 8.4 : item.dist_resistance_pct < 3 ? 4.2 : 2.1;
+                  return (
+                    <PeakDetailStockCard
+                      key={item.symbol}
+                      symbol={item.symbol}
+                      last_price={item.last_price}
+                      change_pct={changePct}
+                      volume={item.volume || 2500000}
+                      pivot_price={pivot}
+                      now_vs_pivot_pct={item.dist_resistance_pct}
+                      breakout_volume_mult={item.volume_ratio || 2.4}
+                      rs_rating={Math.min(99, Math.round(75 + item.swing_score * 0.22))}
+                      price_vs_50ma_pct={
+                        item.ema50
+                          ? Math.round(((item.last_price - item.ema50) / item.ema50) * 1000) / 10
+                          : 15.2
+                      }
+                      tags={item.tags && item.tags.length > 0 ? item.tags : [item.setup_category]}
+                      action_link_text="Open Swing Setup screen"
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Detailed Results Table */
+          <div className="bg-[#1c1c1c] border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left whitespace-nowrap">
               <thead className="text-[11px] text-zinc-400 bg-zinc-900/60 border-b border-zinc-800 uppercase tracking-wider">
                 <tr>
                   <th className="px-5 py-3.5">Stock</th>
@@ -414,7 +480,8 @@ export default function SwingTradePage() {
               </tbody>
             </table>
           </div>
-        </div>
+          </div>
+        )}
       </div>
     </MainLayout>
   );

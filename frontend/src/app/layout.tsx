@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Trading Pro",
-  description: "AI-powered stock trading assistant",
+  title: "F&O Screener Pro | AI Breakout & Technical Screener",
+  description: "Institutional-grade NSE & F&O breakout scanner and market analytics",
 };
 
 export default function RootLayout({
