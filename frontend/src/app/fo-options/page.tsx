@@ -10,14 +10,16 @@ import { OIHeatmap } from "@/components/options/OIHeatmap";
 import { OptionDetailsDrawer, DrawerOptionData } from "@/components/options/OptionDetailsDrawer";
 import { BacktestModal } from "@/components/options/BacktestModal";
 import { EvidenceModal, EvidenceItem } from "@/components/options/EvidenceModal";
+import { OrderFlow200 } from "@/components/options/OrderFlow200";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
 // ─── Tab Config ─────────────────────────────────────────────────────────────
-type TabId = "overview" | "chain" | "liquidity" | "heatmap" | "candidates" | "aireview";
+type TabId = "overview" | "chain" | "orderflow" | "liquidity" | "heatmap" | "candidates" | "aireview";
 const TABS: { id: TabId; label: string }[] = [
   { id: "overview", label: "📊 Overview" },
   { id: "chain", label: "📋 Option Chain" },
+  { id: "orderflow", label: "🌊 200-Level Order Flow" },
   { id: "liquidity", label: "🗺️ Liquidity Map" },
   { id: "heatmap", label: "🔥 OI Heatmap" },
   { id: "candidates", label: "⭐ Candidates" },
@@ -141,6 +143,10 @@ export default function FoOptionsPage() {
   const [drawerData, setDrawerData] = useState<DrawerOptionData | null>(null);
   const [backtestOption, setBacktestOption] = useState<DrawerOptionData | null>(null);
   const [evidenceItem, setEvidenceItem] = useState<EvidenceItem | null>(null);
+
+  // 200-Level Order Flow Selected Contract
+  const [orderFlowStrike, setOrderFlowStrike] = useState<number>(0);
+  const [orderFlowOptionType, setOrderFlowOptionType] = useState<"CE" | "PE">("CE");
 
   const [chainData, setChainData] = useState<ChainData | null>(null);
   const [candidatesData, setCandidatesData] = useState<CandidatesData | null>(null);
@@ -804,6 +810,18 @@ export default function FoOptionsPage() {
               </div>
             )}
 
+            {/* ── TAB: 200-LEVEL ORDER FLOW ──────────────────────────────────── */}
+            {activeTab === "orderflow" && (
+              <OrderFlow200
+                symbol={symbol}
+                expiry={expiry || chainData.expiry}
+                atmStrike={chainData.atm_strike}
+                strikes={chainData.rows.map((r) => r.strike)}
+                initialStrike={orderFlowStrike || chainData.atm_strike}
+                initialOptionType={orderFlowOptionType || "CE"}
+              />
+            )}
+
             {/* ── TAB: LIQUIDITY MAP ─────────────────────────────────────────── */}
             {activeTab === "liquidity" && (
               <LiquidityMap
@@ -1056,6 +1074,11 @@ export default function FoOptionsPage() {
           data={drawerData}
           onClose={() => setDrawerData(null)}
           onOpenBacktest={(opt) => setBacktestOption(opt)}
+          onOpenOrderFlow={(strike, optionType) => {
+            setOrderFlowStrike(strike);
+            setOrderFlowOptionType(optionType);
+            setActiveTab("orderflow");
+          }}
         />
 
         <BacktestModal

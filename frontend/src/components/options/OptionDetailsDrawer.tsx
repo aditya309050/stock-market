@@ -36,6 +36,7 @@ interface OptionDetailsDrawerProps {
   data: DrawerOptionData | null;
   onClose: () => void;
   onOpenBacktest?: (opt: DrawerOptionData) => void;
+  onOpenOrderFlow?: (strike: number, optionType: "CE" | "PE") => void;
 }
 
 function fmt(n: number, d = 0): string {
@@ -48,7 +49,7 @@ function fmtCompact(n: number): string {
   return String(n);
 }
 
-export function OptionDetailsDrawer({ data, onClose, onOpenBacktest }: OptionDetailsDrawerProps) {
+export function OptionDetailsDrawer({ data, onClose, onOpenBacktest, onOpenOrderFlow }: OptionDetailsDrawerProps) {
   const [tab, setTab] = useState<"overview" | "greeks" | "oihistory" | "analysis">("overview");
 
   if (!data) return null;
@@ -330,6 +331,29 @@ export function OptionDetailsDrawer({ data, onClose, onOpenBacktest }: OptionDet
               </div>
             )}
           </div>
+        )}
+      </div>
+
+      {/* Drawer Bottom Actions */}
+      <div className="p-4 bg-zinc-900 border-t border-zinc-800 flex gap-2">
+        {onOpenOrderFlow && (
+          <button
+            onClick={() => {
+              onOpenOrderFlow(data.strike, data.option_type);
+              onClose();
+            }}
+            className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <span>🌊</span> 200-Level Order Flow
+          </button>
+        )}
+        {onOpenBacktest && (
+          <button
+            onClick={() => onOpenBacktest(data)}
+            className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs rounded-xl transition cursor-pointer border border-zinc-700/60"
+          >
+            🧪 Backtest
+          </button>
         )}
       </div>
     </div>

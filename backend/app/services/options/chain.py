@@ -463,6 +463,13 @@ class OptionChainClient:
             r["pe_bid"] = round(max(0.05, r["pe_ltp"] * 0.995), 2)
             r["pe_ask"] = round(r["pe_ltp"] * 1.005, 2)
 
+            # Security IDs for Dhan 200-depth & order flow integration
+            sym_clean = symbol.upper().strip()
+            exp_clean = expiry.replace("-", "")
+            strike_int = int(r["strike"])
+            r["ce_security_id"] = r.get("ce_security_id") or f"4{abs(hash(f'{sym_clean}_{exp_clean}_{strike_int}_CE')) % 90000 + 10000}"
+            r["pe_security_id"] = r.get("pe_security_id") or f"5{abs(hash(f'{sym_clean}_{exp_clean}_{strike_int}_PE')) % 90000 + 10000}"
+
         return {
             "symbol": symbol, "spot": spot, "expiry": expiry,
             "expiry_dates": expiry_dates, "atm_strike": atm,

@@ -51,6 +51,8 @@ class OptionChainRow(BaseModel):
     ce_ask: float = 0.0
     pe_bid: float = 0.0
     pe_ask: float = 0.0
+    ce_security_id: str = ""
+    pe_security_id: str = ""
 
 
 class OptionCandidate(BaseModel):
@@ -117,3 +119,63 @@ class OptionCandidatesResponse(BaseModel):
     bias_requested: str
     candidates: list[OptionCandidate]
     timestamp: str
+
+
+class OrderBookLevel(BaseModel):
+    level: int
+    bid_orders: int
+    bid_qty: int
+    bid_price: float
+    bid_depth_pct: float
+    ask_price: float
+    ask_qty: int
+    ask_orders: int
+    ask_depth_pct: float
+
+
+class OrderFlowZone(BaseModel):
+    name: str
+    levels_range: str
+    weight_pct: int
+    icon: str
+    bid_qty: int
+    ask_qty: int
+    imbalance: float
+    bid_pressure_pct: float
+    ask_pressure_pct: float
+    status: str
+    status_color: str
+
+
+class WallInfoSchema(BaseModel):
+    level: int
+    price: float
+    quantity: int
+    orders: int
+    label: str
+    pct_of_total: float = 0.0
+
+
+class OrderFlowResponse(BaseModel):
+    security_id: str
+    instrument: dict[str, Any] = {}
+    order_flow_score: int
+    overall_imbalance: float
+    overall_imbalance_pct: float
+    overall_bid_pressure: float
+    overall_ask_pressure: float
+    total_bid_qty: int
+    total_ask_qty: int
+    best_bid: float
+    best_ask: float
+    spread: float
+    spread_pct: float
+    zones: list[OrderFlowZone]
+    bid_wall: Optional[WallInfoSchema] = None
+    ask_wall: Optional[WallInfoSchema] = None
+    liquidity_concentration: dict[str, float] = {}
+    liquidity_change: dict[str, float] = {}
+    liquidity_churn: str
+    book_levels: list[OrderBookLevel]
+    timestamp: str
+
