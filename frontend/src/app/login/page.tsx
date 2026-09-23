@@ -16,23 +16,38 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Email format validator (checks format, domain, and TLD)
+  const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !EMAIL_REGEX.test(cleanEmail)) {
+      setError("Please enter a valid email address (e.g. yourname@gmail.com).");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters long.");
+      return;
+    }
+
     setLoading(true);
     try {
       if (mode === "login") {
-        await login(email, password);
+        await login(cleanEmail, password);
       } else {
-        await register(email, password, fullName || undefined);
+        await register(cleanEmail, password, fullName.trim() || undefined);
       }
     } catch (err) {
       setError(
         err instanceof ApiError
           ? err.message
           : mode === "login"
-          ? "Login failed. Check your credentials."
-          : "Registration failed."
+          ? "Invalid email or password. Please check your credentials."
+          : "Registration failed. An account with this email may already exist."
       );
     } finally {
       setLoading(false);
@@ -42,6 +57,7 @@ export default function LoginPage() {
   const handleQuickDemo = () => {
     setEmail("adityaraj309050@gmail.com");
     setPassword("password123");
+    setError("");
   };
 
   return (

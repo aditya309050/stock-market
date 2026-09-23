@@ -17,7 +17,7 @@ const NAV = [
 
 export function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Close mobile menu whenever the route changes
@@ -122,19 +122,28 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Bottom Mobile Drawer Footer */}
-          <div className="pt-6 border-t border-zinc-800/80 mt-6 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs text-zinc-400 font-medium">NSE Live Connected</span>
+          <div className="pt-5 border-t border-zinc-800/80 mt-6 flex items-center justify-between gap-3">
+            {/* User Profile Info */}
+            <div className="flex items-center gap-2.5 overflow-hidden">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-md">
+                {(user?.email?.[0] || "U").toUpperCase()}
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-xs font-semibold text-white truncate max-w-[180px] sm:max-w-[220px]">
+                  {user?.email || "adityaraj309050@gmail.com"}
+                </span>
+              </div>
             </div>
+
+            {/* Logout Button */}
             <button
               onClick={() => {
                 setMobileMenuOpen(false);
                 logout();
               }}
-              className="px-4 py-2 text-xs font-semibold rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-colors"
+              className="px-4 py-2 text-xs font-semibold rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-colors shrink-0 cursor-pointer"
             >
-              Sign Out
+              Logout
             </button>
           </div>
         </div>
