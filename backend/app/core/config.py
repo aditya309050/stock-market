@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     DHAN_WS_URL: str = "wss://api-feed.dhan.co"
     DHAN_SCRIP_MASTER_URL: str = "https://images.dhan.co/api-data/api-scrip-master.csv"
 
+    # Telegram Alert Bot Configuration
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_CHAT_ID: str = ""
+    ALERTS_ENABLED: bool = True
+
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 
     @property
@@ -38,6 +43,10 @@ class Settings(BaseSettings):
     @property
     def dhan_configured(self) -> bool:
         return bool(self.DHAN_CLIENT_ID and self.DHAN_ACCESS_TOKEN)
+
+    @property
+    def telegram_configured(self) -> bool:
+        return bool(self.TELEGRAM_BOT_TOKEN and self.TELEGRAM_CHAT_ID)
 
 
 settings = Settings()

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { DhanOrderModal } from "@/components/trading/DhanOrderModal";
 
 export interface DrawerOptionData {
   strike: number;
@@ -51,6 +52,7 @@ function fmtCompact(n: number): string {
 
 export function OptionDetailsDrawer({ data, onClose, onOpenBacktest, onOpenOrderFlow }: OptionDetailsDrawerProps) {
   const [tab, setTab] = useState<"overview" | "greeks" | "oihistory" | "analysis">("overview");
+  const [orderModalOpen, setOrderModalOpen] = useState(false);
 
   if (!data) return null;
 
@@ -335,27 +337,48 @@ export function OptionDetailsDrawer({ data, onClose, onOpenBacktest, onOpenOrder
       </div>
 
       {/* Drawer Bottom Actions */}
-      <div className="p-4 bg-zinc-900 border-t border-zinc-800 flex gap-2">
+      <div className="p-4 bg-zinc-900 border-t border-zinc-800 flex flex-wrap gap-2">
+        <button
+          onClick={() => setOrderModalOpen(true)}
+          className={`flex-1 py-2.5 font-bold text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer text-white ${
+            isCE
+              ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-900/30"
+              : "bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 shadow-rose-900/30"
+          }`}
+        >
+          <span>⚡</span> 1-Click Dhan Trade
+        </button>
+
         {onOpenOrderFlow && (
           <button
             onClick={() => {
               onOpenOrderFlow(data.strike, data.option_type);
               onClose();
             }}
-            className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+            className="px-3 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs rounded-xl transition cursor-pointer border border-zinc-700/60 flex items-center gap-1"
           >
-            <span>🌊</span> 200-Level Order Flow
+            <span>🌊</span> Depth
           </button>
         )}
         {onOpenBacktest && (
           <button
             onClick={() => onOpenBacktest(data)}
-            className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs rounded-xl transition cursor-pointer border border-zinc-700/60"
+            className="px-3 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs rounded-xl transition cursor-pointer border border-zinc-700/60"
           >
-            🧪 Backtest
+            🧪 Test
           </button>
         )}
       </div>
+
+      {/* 1-Click Dhan Execution Modal */}
+      <DhanOrderModal
+        isOpen={orderModalOpen}
+        onClose={() => setOrderModalOpen(false)}
+        defaultSymbol={`${data.symbol} ${data.strike} ${data.option_type}`}
+        defaultPrice={data.ltp}
+        defaultSide="BUY"
+        exchangeSegment="NSE_FNO"
+      />
     </div>
   );
 }

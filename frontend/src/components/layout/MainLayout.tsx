@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
+import { TelegramAlertModal } from "@/components/alerts/TelegramAlertModal";
 
 const NAV = [
   { href: "/fo-options", label: "F&O Options", desc: "Live Greeks & Max Pain" },
@@ -13,12 +14,14 @@ const NAV = [
   { href: "/swing-trade", label: "Swing Trade", desc: "Multi-day momentum" },
   { href: "/dma-screener", label: "DMA & S/R", desc: "Confluence & Key Levels" },
   { href: "/sector-analysis", label: "Sector Analysis", desc: "Sectoral Heatmaps" },
+  { href: "/backtest", label: "Backtest", desc: "Strategy Simulator" },
 ];
 
 export function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { logout, user } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [alertsModalOpen, setAlertsModalOpen] = useState(false);
 
   // Close mobile menu whenever the route changes
   useEffect(() => {
@@ -57,8 +60,16 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
 
-        {/* Right Section: Desktop Logout & Mobile Hamburger Button */}
-        <div className="flex items-center gap-3">
+        {/* Right Section: Desktop Alerts & Logout & Mobile Hamburger Button */}
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => setAlertsModalOpen(true)}
+            className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-violet-600/15 hover:bg-violet-600/25 text-violet-300 border border-violet-500/30 transition-colors font-medium cursor-pointer"
+          >
+            <span>🔔</span>
+            <span className="hidden sm:inline">Alerts</span>
+          </button>
+
           <button
             onClick={logout}
             className="hidden sm:inline-flex text-xs px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white border border-white/10 transition-colors"
@@ -150,6 +161,11 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
       )}
 
       <main className="flex-1 overflow-auto">{children}</main>
+
+      <TelegramAlertModal
+        isOpen={alertsModalOpen}
+        onClose={() => setAlertsModalOpen(false)}
+      />
     </div>
   );
 }

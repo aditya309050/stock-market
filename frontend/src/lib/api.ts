@@ -306,4 +306,166 @@ export const runDMAScan = (index = "NIFTY 500", filter_category?: string) => {
 export const getDMAStockDetail = (symbol: string) =>
   request<StockDetailResponse>(`/dma-screener/stock/${encodeURIComponent(symbol)}`);
 
+// ——— Dhan Order Execution ———
+export interface DhanOrderRequest {
+  symbol: string;
+  security_id?: string;
+  exchange_segment?: string;
+  transaction_type: "BUY" | "SELL";
+  product_type: "INTRADAY" | "CNC" | "MARGIN";
+  order_type: "MARKET" | "LIMIT" | "STOP_LOSS";
+  quantity: number;
+  price?: number;
+  trigger_price?: number;
+  stop_loss?: number;
+  target?: number;
+  is_paper_trading?: boolean;
+}
+
+export interface DhanOrderResponse {
+  order_id: string;
+  correlation_id: string;
+  symbol: string;
+  transaction_type: string;
+  quantity: number;
+  price: number;
+  order_type: string;
+  product_type: string;
+  order_status: string;
+  message: string;
+  executed_at: string;
+  is_paper: boolean;
+}
+
+export interface DhanOrderBookItem {
+  order_id: string;
+  trading_symbol: string;
+  transaction_type: string;
+  exchange_segment: string;
+  product_type: string;
+  order_type: string;
+  quantity: number;
+  filled_qty: number;
+  price: number;
+  order_status: string;
+  create_time: string;
+}
+
+export const placeDhanOrder = (order: DhanOrderRequest) =>
+  request<DhanOrderResponse>("/dhan/place", {
+    method: "POST",
+    body: JSON.stringify(order),
+  });
+
+export const getDhanOrders = () =>
+  request<DhanOrderBookItem[]>("/dhan/orders");
+
+export const cancelDhanOrder = (orderId: string) =>
+  request<{ success: boolean; message: string }>(`/dhan/orders/${orderId}`, {
+    method: "DELETE",
+  });
+
+// ——— Telegram Alerts ———
+export interface AlertStatusResponse {
+  is_configured: boolean;
+  alerts_enabled: boolean;
+  chat_id_set: boolean;
+  bot_token_set: boolean;
+  total_alerts_recorded: number;
+}
+
+export interface AlertHistoryItem {
+  id: number;
+  timestamp: string;
+  text: string;
+  status: string;
+  note?: string;
+}
+
+export const getAlertStatus = () =>
+  request<AlertStatusResponse>("/alerts/status");
+
+export const sendTestAlert = () =>
+  request<{ success: boolean; status: string; message: string }>("/alerts/test", {
+    method: "POST",
+  });
+
+export const getAlertHistory = () =>
+  request<AlertHistoryItem[]>("/alerts/history");
+
+export const triggerScanAndDispatch = (index = "NIFTY 50") =>
+  request<{ index: string; dispatched_count: number; items: any[] }>(
+    `/alerts/scan-and-dispatch?index=${encodeURIComponent(index)}`,
+    { method: "POST" }
+  );
+
+// ——— Interactive Backtester ———
+export interface BacktestRequest {
+  strategy: string;
+  universe: string;
+  lookback_years: number;
+  target_pct: number;
+  stop_loss_pct: number;
+  rsi_filter_max: number;
+  initial_capital: number;
+  custom_symbol?: string;
+}
+
+export interface EquityPoint {
+  date: string;
+  equity: number;
+  benchmark: number;
+  drawdown_pct: number;
+}
+
+export interface BacktestTradeItem {
+  id: number;
+  symbol: string;
+  entry_date: string;
+  entry_price: number;
+  exit_date: string;
+  exit_price: number;
+  pnl_pct: number;
+  pnl_amount: number;
+  holding_days: number;
+  exit_reason: string;
+  is_win: boolean;
+}
+
+export interface BacktestSummary {
+  strategy: string;
+  universe: string;
+  lookback_years: number;
+  initial_capital: number;
+  final_capital: number;
+  net_profit: number;
+  total_return_pct: number;
+  benchmark_return_pct: number;
+  total_trades: number;
+  winning_trades: number;
+  losing_trades: number;
+  win_rate_pct: number;
+  profit_factor: number;
+  max_drawdown_pct: number;
+  avg_trade_pnl_pct: number;
+  avg_holding_days: number;
+}
+
+export interface BacktestResponse {
+  summary: BacktestSummary;
+  equity_curve: EquityPoint[];
+  trades: BacktestTradeItem[];
+}
+
+export const runBacktest = (params: BacktestRequest) =>
+  request<BacktestResponse>("/backtest/run", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+
+export const getBacktestPresets = () =>
+  request<any[]>("/backtest/presets");
+
+
+
 

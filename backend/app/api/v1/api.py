@@ -11,6 +11,9 @@ from .endpoints import (
     swing_trade,
     intraday,
     fo_options,
+    dhan_orders,
+    alerts,
+    backtest,
 )
 
 api_router = APIRouter()
@@ -26,5 +29,8 @@ api_router.include_router(golden_cross.router, prefix="/golden-cross", tags=["go
 api_router.include_router(swing_trade.router, prefix="/swing-trade", tags=["swing-trade"])
 api_router.include_router(intraday.router, prefix="/intraday", tags=["intraday"])
 api_router.include_router(fo_options.router, prefix="/fo-options", tags=["fo-options"])
+api_router.include_router(dhan_orders.router, prefix="/dhan", tags=["dhan-orders"])
+api_router.include_router(alerts.router, prefix="/alerts", tags=["alerts"])
+api_router.include_router(backtest.router, prefix="/backtest", tags=["backtest"])
 
 

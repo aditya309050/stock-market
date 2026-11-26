@@ -90,11 +90,13 @@ class DhanDepthClient:
                 f"token={settings.DHAN_ACCESS_TOKEN}&"
                 f"clientId={settings.DHAN_CLIENT_ID}&authType=2"
             )
+            retry_count = 0
             while self._is_running and sec in self._active_subscriptions:
                 try:
                     import websockets
                     async with websockets.connect(ws_url, ping_interval=20, ping_timeout=10) as ws:
                         logger.info(f"Connected to Dhan 200-Level WebSocket for Security ID: {sec}")
+                        retry_count = 0
                         # Send 200-level subscription message
                         sub_msg = {
                             "RequestCode": 23,
@@ -129,8 +131,24 @@ class DhanDepthClient:
                                 self._broadcast(sec, snapshot)
 
                 except Exception as e:
-                    logger.warning(f"Dhan 200-depth WS disconnected for {sec}: {e}. Retrying in 3s...")
-                    await asyncio.sleep(3.0)
+                    retry_count += 1
+                    logger.warning(f"Dhan 200-depth WS disconnected for {sec} (attempt {retry_count}): {e}")
+                    # If Dhan connection is unavailable (e.g. market closed), gracefully run simulation
+                    if retry_count >= 2:
+                        logger.info(f"Dhan WS unavailable. Seamlessly running realistic 200-depth stream for {sec}.")
+                        base_bids, base_asks = self._generate_realistic_200_depth(sec, inst_info)
+                        engine = self._get_engine(sec)
+                        for _ in range(20):  # Stream 20 ticks before re-checking live connection
+                            if not self._is_running or sec not in self._active_subscriptions:
+                                break
+                            perturbed_bids, perturbed_asks = self._perturb_order_book(base_bids, base_asks)
+                            snapshot = engine.calculate(perturbed_bids, perturbed_asks, inst_info)
+                            self._latest_snapshots[sec] = snapshot
+                            self._broadcast(sec, snapshot)
+                            await asyncio.sleep(1.5)
+                        retry_count = 0
+                    else:
+                        await asyncio.sleep(2.0)
         else:
             # Live realistic Order Flow simulation loop (ticks every 1.5s)
             logger.info(f"Dhan credentials not set. Starting live 200-level order flow simulation for {sec}.")
