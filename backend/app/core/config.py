@@ -10,6 +10,8 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/stock_trading_ai"
 
+    ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:8000,http://127.0.0.1:3000,http://127.0.0.1:8000"
+
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
 
@@ -22,6 +24,12 @@ class Settings(BaseSettings):
     DHAN_SCRIP_MASTER_URL: str = "https://images.dhan.co/api-data/api-scrip-master.csv"
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
+
+    @property
+    def cors_origins(self) -> list[str]:
+        if not self.ALLOWED_ORIGINS:
+            return ["http://localhost:3000", "http://localhost:8000"]
+        return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
 
     @property
     def openai_configured(self) -> bool:

@@ -185,8 +185,8 @@ export default function ScreenerPage() {
   const fetchScan = async () => {
     setLoading(true);
     try {
-      // Call swing trade or intraday backend for real market data
-      const res = await fetch(`${API_BASE}/swing-trade/scan?universe=${encodeURIComponent(universe)}&refresh=true`);
+      // Call swing trade or intraday backend for real market data (cached by default for instant loading)
+      const res = await fetch(`${API_BASE}/swing-trade/scan?universe=${encodeURIComponent(universe)}`);
       if (res.ok) {
         const json = await res.json();
         if (json.results && json.results.length > 0) {
